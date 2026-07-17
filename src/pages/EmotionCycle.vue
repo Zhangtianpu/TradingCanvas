@@ -12,8 +12,8 @@
         <span class="height-label">空间板</span>
       </div>
       <div class="space-info">
-        <div class="space-stock" v-if="latestEmotion?.spaceBoardStockName">
-          {{ latestEmotion.spaceBoardStockName }}
+        <div class="space-stock" v-if="latestEmotion?.spaceBoardStocks?.length">
+          {{ latestEmotion.spaceBoardStocks[0]?.name }}
         </div>
         <div class="breakthrough-status" :class="{ active: latestEmotion?.isBreakthrough }">
           {{ latestEmotion?.isBreakthrough ? '高度突破' : '未突破' }}
@@ -216,7 +216,7 @@
             <span class="height-num">{{ e.maxBoardHeight }}</span>
             <span class="height-change" :class="e.changeClass">{{ e.changeText }}</span>
           </div>
-          <div class="timeline-stock">{{ e.spaceBoardStockName || '-' }}</div>
+          <div class="timeline-stock">{{ e.spaceBoardStocks?.[0]?.name || '-' }}</div>
           <div v-if="e.isBreakthrough" class="breakthrough-badge">破</div>
         </div>
       </div>
@@ -237,7 +237,7 @@
               {{ e.maxBoardHeight }}板
               <span v-if="e.isBreakthrough" class="breakthrough-tag">破</span>
             </span>
-            <span class="history-stock">{{ e.spaceBoardStockName || '-' }}</span>
+            <span class="history-stock">{{ e.spaceBoardStocks?.[0]?.name || '-' }}</span>
           </div>
           <div class="history-side">
             <span class="tag" :class="phaseTagClass(e.phase)">{{ EMOTION_PHASE_LABELS[e.phase] }}</span>
@@ -307,6 +307,11 @@ const form = reactive({
   spaceBoardStocks: [] as SpaceBoardStock[],
   prevHighBoard: 0,
   isBreakthrough: false,
+  isMedian: false,
+  isIcePoint: false,
+  isAnnouncement: false,
+  isClear: false,
+  remark: '',
   // 情绪
   phase: 'freeze' as EmotionPhase,
   leadingThemeId: '',
@@ -471,6 +476,11 @@ function handleSave() {
     spaceBoardStocks: form.spaceBoardStocks.filter(s => s.name && s.height > 0),
     prevHighBoard: form.prevHighBoard,
     isBreakthrough: form.isBreakthrough,
+    isMedian: form.isMedian,
+    isIcePoint: form.isIcePoint,
+    isAnnouncement: form.isAnnouncement,
+    isClear: form.isClear,
+    remark: form.remark,
     // 情绪
     phase: form.phase,
     leadingThemeId: form.leadingThemeId,
@@ -500,7 +510,7 @@ function phaseTagClass(phase: EmotionPhase) {
 async function renderChart() {
   if (!chartRef.value || recentEmotions.value.length === 0) return
 
-  const Chart = (await import('chart.js')).default
+  const { Chart } = await import('chart.js')
   if (chartInstance) chartInstance.destroy()
 
   const data = recentEmotions.value

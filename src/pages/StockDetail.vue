@@ -227,7 +227,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useStockStore } from '@/stores/stock'
 import { useThemeStore } from '@/stores/theme'
 import { useTradeModeStore } from '@/stores/tradeMode'
-import { STOCK_ROLE_LABELS, STOCK_TAG_LABELS, type StockTag } from '@/types'
+import { STOCK_ROLE_LABELS, STOCK_TAG_LABELS, type StockTag, type StockRole } from '@/types'
 import { today } from '@/composables/useDate'
 import { useToast } from '@/composables/useToast'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -264,7 +264,7 @@ const sortedTrades = computed(() => {
 const editForm = reactive({
   code: '',
   name: '',
-  role: 'follower' as const,
+  role: 'follower' as StockRole,
   tags: [] as StockTag[]
 })
 

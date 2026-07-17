@@ -264,7 +264,7 @@ import { ref, computed, reactive, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useThemeStore } from '@/stores/theme'
 import { useStockStore } from '@/stores/stock'
-import { THEME_LEVEL_LABELS, THEME_STATUS_LABELS, STOCK_ROLE_LABELS, STOCK_TAG_LABELS, type StockTag, type ThemeStatus } from '@/types'
+import { THEME_LEVEL_LABELS, THEME_STATUS_LABELS, STOCK_ROLE_LABELS, STOCK_TAG_LABELS, type StockTag, type ThemeStatus, type ThemeLevel } from '@/types'
 import { today } from '@/composables/useDate'
 import { useToast } from '@/composables/useToast'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -342,8 +342,8 @@ const sortedEvents = computed(() => {
 const editForm = reactive({
   name: '',
   sector: '',
-  level: 'main' as const,
-  status: 'burst' as const,
+  level: 'main' as ThemeLevel,
+  status: 'burst' as ThemeStatus,
   burstDate: '',
   parentId: ''
 })

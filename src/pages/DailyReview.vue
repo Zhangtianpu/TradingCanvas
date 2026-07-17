@@ -368,7 +368,6 @@ function handleSave() {
   const existing = emotionStore.getEmotionByDate(selectedDate.value)
 
   emotionStore.addOrUpdateEmotion({
-    id: existing?.id || '',
     date: selectedDate.value,
     // 指数
     shIndex: macroForm.shIndex,
@@ -401,6 +400,11 @@ function handleSave() {
       : existing?.spaceBoardStocks || [],
     prevHighBoard: existing?.prevHighBoard || 0,
     isBreakthrough: existing?.isBreakthrough || false,
+    isMedian: existing?.isMedian || false,
+    isIcePoint: existing?.isIcePoint || false,
+    isAnnouncement: existing?.isAnnouncement || false,
+    isClear: existing?.isClear || false,
+    remark: existing?.remark || '',
     // 情绪
     phase: existing?.phase || 'freeze',
     leadingThemeId: existing?.leadingThemeId || '',

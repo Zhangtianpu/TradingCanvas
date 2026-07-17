@@ -228,7 +228,7 @@
 import { ref, computed, reactive } from 'vue'
 import { useThemeStore } from '@/stores/theme'
 import { useStockStore } from '@/stores/stock'
-import { THEME_LEVEL_LABELS, THEME_STATUS_LABELS, type Theme } from '@/types'
+import { THEME_LEVEL_LABELS, THEME_STATUS_LABELS, type Theme, type ThemeLevel, type ThemeStatus } from '@/types'
 import { today } from '@/composables/useDate'
 import { useToast } from '@/composables/useToast'
 
@@ -253,8 +253,8 @@ const tabs = [
 const form = reactive({
   name: '',
   sector: '',
-  level: 'main' as const,
-  status: 'burst' as const,
+  level: 'main' as ThemeLevel,
+  status: 'burst' as ThemeStatus,
   burstDate: today(),
   parentId: ''
 })

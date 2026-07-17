@@ -264,7 +264,7 @@ const chartOptions = {
       padding: 12,
       cornerRadius: 8,
       displayColors: false,
-      titleFont: { size: 13, weight: 'bold' },
+      titleFont: { size: 13, weight: 'bold' as const },
       bodyFont: { size: 12 }
     }
   },
