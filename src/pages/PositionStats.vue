@@ -68,6 +68,9 @@
       <button class="tab-btn" :class="{ active: tab === 'closed' }" @click="tab = 'closed'">
         已平仓 <span class="tab-count" v-if="closedPositions.length">{{ closedPositions.length }}</span>
       </button>
+      <button class="tab-btn" :class="{ active: tab === 'mode-analysis' }" @click="tab = 'mode-analysis'">
+        模式分析
+      </button>
       <button class="tab-btn" :class="{ active: tab === 'trades' }" @click="tab = 'trades'">
         交易记录 <span class="tab-count" v-if="allTrades.length">{{ allTrades.length }}</span>
       </button>
@@ -161,6 +164,93 @@
               <span class="pos-val">{{ formatPct(p.realizedPnlRate) }}</span>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 模式分析 -->
+    <div v-if="tab === 'mode-analysis'">
+      <div class="card mode-analysis-card">
+        <div class="mode-analysis-header">
+          <label class="mode-select-label">选择模式:</label>
+          <select v-model="selectedModeId" class="mode-select">
+            <option value="">全部模式</option>
+            <option v-for="m in tradeModeStore.tradeModes" :key="m.id" :value="m.id">{{ m.name }}</option>
+          </select>
+        </div>
+
+        <div v-if="modeAnalysisData" class="mode-analysis-content">
+          <!-- 统计摘要 -->
+          <div class="analysis-summary">
+            <div class="summary-item">
+              <span class="summary-label">总交易次数</span>
+              <span class="summary-value">{{ modeAnalysisData.totalCount }}次</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">盈利次数</span>
+              <span class="summary-value win">{{ modeAnalysisData.winCount }}次</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">亏损次数</span>
+              <span class="summary-value loss">{{ modeAnalysisData.lossCount }}次</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">胜率</span>
+              <span class="summary-value" :class="{ win: modeAnalysisData.winRate >= 50, loss: modeAnalysisData.winRate < 50 }">
+                {{ modeAnalysisData.winRate.toFixed(1) }}%
+              </span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">总盈亏</span>
+              <span class="summary-value" :class="{ win: modeAnalysisData.totalPnl >= 0, loss: modeAnalysisData.totalPnl < 0 }">
+                {{ modeAnalysisData.totalPnl >= 0 ? '+' : '' }}{{ formatMoney(modeAnalysisData.totalPnl) }}
+              </span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">最大盈利</span>
+              <span class="summary-value win">+{{ formatMoney(modeAnalysisData.maxWin) }}</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">最大亏损</span>
+              <span class="summary-value loss">{{ formatMoney(modeAnalysisData.maxLoss) }}</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">平均盈利</span>
+              <span class="summary-value win">+{{ formatMoney(modeAnalysisData.avgWin) }}</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">平均亏损</span>
+              <span class="summary-value loss">{{ formatMoney(modeAnalysisData.avgLoss) }}</span>
+            </div>
+          </div>
+
+          <!-- 盈利标的 -->
+          <div class="analysis-section" v-if="modeAnalysisData.winStocks.length > 0">
+            <div class="section-title win-title">盈利标的 ({{ modeAnalysisData.winStocks.length }})</div>
+            <div class="stock-list">
+              <div v-for="item in modeAnalysisData.winStocks" :key="item.stock.id" class="stock-item win">
+                <span class="stock-name" @click="$router.push(`/stocks/${item.stock.id}`)">{{ item.stock.name }}</span>
+                <span class="stock-pnl">+{{ formatMoney(item.pnl) }}</span>
+                <span class="stock-rate">+{{ formatPct(item.pnlRate) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 亏损标的 -->
+          <div class="analysis-section" v-if="modeAnalysisData.lossStocks.length > 0">
+            <div class="section-title loss-title">亏损标的 ({{ modeAnalysisData.lossStocks.length }})</div>
+            <div class="stock-list">
+              <div v-for="item in modeAnalysisData.lossStocks" :key="item.stock.id" class="stock-item loss">
+                <span class="stock-name" @click="$router.push(`/stocks/${item.stock.id}`)">{{ item.stock.name }}</span>
+                <span class="stock-pnl">{{ formatMoney(item.pnl) }}</span>
+                <span class="stock-rate">{{ formatPct(item.pnlRate) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-else class="empty-state">
+          <p>暂无已平仓数据</p>
         </div>
       </div>
     </div>
@@ -345,7 +435,81 @@ const themeStore = useThemeStore()
 const tradeModeStore = useTradeModeStore()
 const toast = useToast()
 
-const tab = ref<'positions' | 'closed' | 'trades'>('positions')
+const tab = ref<'positions' | 'closed' | 'mode-analysis' | 'trades'>('positions')
+
+// 模式分析
+const selectedModeId = ref<string>('')
+
+interface ModeAnalysisItem {
+  stock: Stock
+  pnl: number
+  pnlRate: number
+}
+
+interface ModeAnalysisResult {
+  totalCount: number
+  winCount: number
+  lossCount: number
+  winRate: number
+  totalPnl: number
+  maxWin: number
+  maxLoss: number
+  avgWin: number
+  avgLoss: number
+  winStocks: ModeAnalysisItem[]
+  lossStocks: ModeAnalysisItem[]
+}
+
+const modeAnalysisData = computed<ModeAnalysisResult | null>(() => {
+  let positions = closedPositions.value
+
+  // 筛选模式
+  if (selectedModeId.value) {
+    positions = positions.filter(p => {
+      const buyTrades = p.stock.trades.filter(t => t.direction === 'buy')
+      return buyTrades.some(t => t.modeId === selectedModeId.value)
+    })
+  }
+
+  if (positions.length === 0) return null
+
+  const items: ModeAnalysisItem[] = positions.map(p => ({
+    stock: p.stock,
+    pnl: p.realizedPnl,
+    pnlRate: p.realizedPnlRate
+  }))
+
+  const winStocks = items.filter(i => i.pnl >= 0).sort((a, b) => b.pnl - a.pnl)
+  const lossStocks = items.filter(i => i.pnl < 0).sort((a, b) => a.pnl - b.pnl)
+
+  const winCount = winStocks.length
+  const lossCount = lossStocks.length
+  const totalCount = winCount + lossCount
+  const winRate = totalCount > 0 ? (winCount / totalCount) * 100 : 0
+  const totalPnl = items.reduce((sum, i) => sum + i.pnl, 0)
+
+  const winPnls = winStocks.map(i => i.pnl)
+  const lossPnls = lossStocks.map(i => i.pnl)
+
+  const maxWin = winPnls.length > 0 ? Math.max(...winPnls) : 0
+  const maxLoss = lossPnls.length > 0 ? Math.min(...lossPnls) : 0
+  const avgWin = winPnls.length > 0 ? winPnls.reduce((a, b) => a + b, 0) / winPnls.length : 0
+  const avgLoss = lossPnls.length > 0 ? lossPnls.reduce((a, b) => a + b, 0) / lossPnls.length : 0
+
+  return {
+    totalCount,
+    winCount,
+    lossCount,
+    winRate,
+    totalPnl,
+    maxWin,
+    maxLoss,
+    avgWin,
+    avgLoss,
+    winStocks,
+    lossStocks
+  }
+})
 
 // 添加/编辑交易弹窗
 const showAddTrade = ref(false)
@@ -1436,6 +1600,143 @@ function updatePrice(stockId: string, event: Event) {
 .sort-arrow {
   font-size: 10px;
   margin-left: 2px;
+}
+
+/* 模式分析 */
+.mode-analysis-card {
+  padding: 20px;
+}
+
+.mode-analysis-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.mode-select-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.mode-select {
+  flex: 1;
+  max-width: 200px;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.mode-select:focus {
+  outline: none;
+  border-color: var(--color-blue);
+}
+
+.analysis-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 12px;
+  padding: 16px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.summary-item {
+  text-align: center;
+}
+
+.summary-label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.summary-value {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.summary-value.win {
+  color: #f85149;
+}
+
+.summary-value.loss {
+  color: #3fb950;
+}
+
+.analysis-section {
+  margin-bottom: 20px;
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.win-title {
+  color: #f85149;
+}
+
+.loss-title {
+  color: #3fb950;
+}
+
+.stock-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.stock-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.stock-item.win {
+  border-left: 3px solid #f85149;
+}
+
+.stock-item.loss {
+  border-left: 3px solid #3fb950;
+}
+
+.stock-name {
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.stock-name:hover {
+  color: var(--color-blue);
+}
+
+.stock-pnl {
+  font-weight: 600;
+}
+
+.stock-item.win .stock-pnl {
+  color: #f85149;
+}
+
+.stock-item.loss .stock-pnl {
+  color: #3fb950;
+}
+
+.stock-rate {
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 
 .trade-table {
