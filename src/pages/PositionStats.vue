@@ -171,9 +171,22 @@
         <p>暂无交易记录</p>
       </div>
       <div v-else class="card trade-table-wrap">
+        <!-- 批量操作栏 -->
+        <div class="batch-bar" v-if="selectedTradeIds.size > 0">
+          <span class="selected-count">已选 {{ selectedTradeIds.size }} 条</span>
+          <button class="btn-batch-del" @click="deleteSelectedTrades">删除选中</button>
+          <button class="btn-clear-sel" @click="selectedTradeIds.clear()">取消选择</button>
+        </div>
+        <div class="batch-bar" v-else>
+          <button class="btn-sel-all" @click="selectAllTrades">全选</button>
+          <button class="btn-del-all" @click="deleteAllTrades">全部删除</button>
+        </div>
         <table class="trade-table">
           <thead>
             <tr>
+              <th class="th-check">
+                <input type="checkbox" :checked="isAllSelected" @change="toggleSelectAll" />
+              </th>
               <th>日期</th>
               <th>个股</th>
               <th>题材</th>
@@ -187,7 +200,10 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="t in allTrades" :key="t.trade.id">
+            <tr v-for="t in allTrades" :key="t.trade.id" :class="{ selected: selectedTradeIds.has(t.trade.id) }">
+              <td class="td-check">
+                <input type="checkbox" :checked="selectedTradeIds.has(t.trade.id)" @change="toggleTradeSelect(t.trade.id)" />
+              </td>
               <td>{{ t.trade.date }}</td>
               <td class="td-name" @click="$router.push(`/stocks/${t.stockId}`)">{{ t.stockName }}</td>
               <td>{{ t.themeName }}</td>
@@ -455,6 +471,53 @@ function saveTrade() {
 
 function deleteTrade(row: TradeRow) {
   stockStore.deleteTradeRecord(row.stockId, row.trade.id)
+}
+
+// ===== 批量选择与删除 =====
+const selectedTradeIds = ref(new Set<string>())
+
+const isAllSelected = computed(() => {
+  return allTrades.value.length > 0 && selectedTradeIds.value.size === allTrades.value.length
+})
+
+function toggleSelectAll() {
+  if (isAllSelected.value) {
+    selectedTradeIds.value.clear()
+  } else {
+    selectAllTrades()
+  }
+}
+
+function selectAllTrades() {
+  selectedTradeIds.value = new Set(allTrades.value.map(t => t.trade.id))
+}
+
+function toggleTradeSelect(tradeId: string) {
+  if (selectedTradeIds.value.has(tradeId)) {
+    selectedTradeIds.value.delete(tradeId)
+  } else {
+    selectedTradeIds.value.add(tradeId)
+  }
+}
+
+function deleteSelectedTrades() {
+  if (selectedTradeIds.value.size === 0) return
+  for (const row of allTrades.value) {
+    if (selectedTradeIds.value.has(row.trade.id)) {
+      stockStore.deleteTradeRecord(row.stockId, row.trade.id)
+    }
+  }
+  selectedTradeIds.value.clear()
+  toast.success('已删除选中记录')
+}
+
+function deleteAllTrades() {
+  if (!confirm('确定要删除全部交易记录吗？此操作不可撤销。')) return
+  for (const row of allTrades.value) {
+    stockStore.deleteTradeRecord(row.stockId, row.trade.id)
+  }
+  selectedTradeIds.value.clear()
+  toast.success('已删除全部记录')
 }
 
 // ===== 导入交割单 =====
@@ -1263,6 +1326,55 @@ function updatePrice(stockId: string, event: Event) {
   overflow: hidden;
 }
 
+.batch-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+}
+
+.selected-count {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.btn-sel-all,
+.btn-clear-sel {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-sel-all:hover,
+.btn-clear-sel:hover {
+  color: var(--color-blue);
+  border-color: var(--color-blue);
+}
+
+.btn-batch-del,
+.btn-del-all {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid #f85149;
+  background: rgba(248,81,73,0.1);
+  color: #f85149;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-batch-del:hover,
+.btn-del-all:hover {
+  background: rgba(248,81,73,0.2);
+}
+
 .trade-table {
   width: 100%;
   border-collapse: collapse;
@@ -1278,6 +1390,15 @@ function updatePrice(stockId: string, event: Event) {
   white-space: nowrap;
 }
 
+.th-check {
+  width: 32px;
+  text-align: center;
+}
+
+.td-check {
+  text-align: center;
+}
+
 .trade-table td {
   padding: 8px 12px;
   border-top: 1px solid var(--border-color);
@@ -1285,6 +1406,10 @@ function updatePrice(stockId: string, event: Event) {
 
 .trade-table tr:hover td {
   background: var(--bg-tertiary);
+}
+
+.trade-table tr.selected td {
+  background: rgba(88,166,255,0.1);
 }
 
 .td-name {
