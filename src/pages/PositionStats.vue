@@ -180,37 +180,6 @@
         <div class="batch-bar" v-else>
           <button class="btn-sel-all" @click="selectAllTrades">全选</button>
           <button class="btn-del-all" @click="deleteAllTrades">全部删除</button>
-          <div class="sort-group">
-            <span class="sort-label">排序:</span>
-            <button 
-              class="sort-btn" 
-              :class="{ active: tradeSortBy === 'date' }" 
-              @click="toggleSort('date')"
-            >
-              时间{{ tradeSortBy === 'date' ? (tradeSortAsc ? '↑' : '↓') : '' }}
-            </button>
-            <button 
-              class="sort-btn" 
-              :class="{ active: tradeSortBy === 'stock' }" 
-              @click="toggleSort('stock')"
-            >
-              个股{{ tradeSortBy === 'stock' ? (tradeSortAsc ? '↑' : '↓') : '' }}
-            </button>
-            <button 
-              class="sort-btn" 
-              :class="{ active: tradeSortBy === 'theme' }" 
-              @click="toggleSort('theme')"
-            >
-              题材{{ tradeSortBy === 'theme' ? (tradeSortAsc ? '↑' : '↓') : '' }}
-            </button>
-            <button 
-              class="sort-btn" 
-              :class="{ active: tradeSortBy === 'mode' }" 
-              @click="toggleSort('mode')"
-            >
-              模式{{ tradeSortBy === 'mode' ? (tradeSortAsc ? '↑' : '↓') : '' }}
-            </button>
-          </div>
         </div>
         <table class="trade-table">
           <thead>
@@ -218,11 +187,19 @@
               <th class="th-check">
                 <input type="checkbox" :checked="isAllSelected" @change="toggleSelectAll" />
               </th>
-              <th>日期</th>
-              <th>个股</th>
-              <th>题材</th>
+              <th class="th-sortable" :class="{ active: tradeSortBy === 'date' }" @click="toggleSort('date')">
+                日期 <span class="sort-arrow">{{ tradeSortBy === 'date' ? (tradeSortAsc ? '▲' : '▼') : '' }}</span>
+              </th>
+              <th class="th-sortable" :class="{ active: tradeSortBy === 'stock' }" @click="toggleSort('stock')">
+                个股 <span class="sort-arrow">{{ tradeSortBy === 'stock' ? (tradeSortAsc ? '▲' : '▼') : '' }}</span>
+              </th>
+              <th class="th-sortable" :class="{ active: tradeSortBy === 'theme' }" @click="toggleSort('theme')">
+                题材 <span class="sort-arrow">{{ tradeSortBy === 'theme' ? (tradeSortAsc ? '▲' : '▼') : '' }}</span>
+              </th>
               <th>方向</th>
-              <th>模式</th>
+              <th class="th-sortable" :class="{ active: tradeSortBy === 'mode' }" @click="toggleSort('mode')">
+                模式 <span class="sort-arrow">{{ tradeSortBy === 'mode' ? (tradeSortAsc ? '▲' : '▼') : '' }}</span>
+              </th>
               <th>价格</th>
               <th>数量</th>
               <th>金额</th>
@@ -1442,38 +1419,23 @@ function updatePrice(stockId: string, event: Event) {
   background: rgba(248,81,73,0.2);
 }
 
-.sort-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
-}
-
-.sort-label {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.sort-btn {
-  font-size: 12px;
-  padding: 4px 10px;
-  border-radius: 4px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
+.th-sortable {
   cursor: pointer;
-  transition: all 0.15s;
+  user-select: none;
+  transition: color 0.15s;
 }
 
-.sort-btn:hover {
+.th-sortable:hover {
   color: var(--text-primary);
-  border-color: var(--text-secondary);
 }
 
-.sort-btn.active {
+.th-sortable.active {
   color: var(--color-blue);
-  border-color: var(--color-blue);
-  background: rgba(88,166,255,0.1);
+}
+
+.sort-arrow {
+  font-size: 10px;
+  margin-left: 2px;
 }
 
 .trade-table {
