@@ -2,7 +2,17 @@
   <div class="position-stats-page">
     <div class="page-header">
       <h1 class="page-title">持仓统计</h1>
-      <button class="btn-add-trade" @click="openAddTrade">+ 添加交易</button>
+      <div class="header-actions">
+        <button class="btn-import" @click="triggerImport">导入交割单</button>
+        <button class="btn-add-trade" @click="openAddTrade">+ 添加交易</button>
+        <input
+          ref="importInput"
+          type="file"
+          accept=".csv"
+          class="hidden-file-input"
+          @change="onImportFile"
+        />
+      </div>
     </div>
 
     <!-- 概览卡片 -->
@@ -302,12 +312,14 @@ import { ref, computed } from 'vue'
 import { useStockStore } from '@/stores/stock'
 import { useThemeStore } from '@/stores/theme'
 import { useTradeModeStore } from '@/stores/tradeMode'
+import { useToast } from '@/composables/useToast'
 import { today } from '@/composables/useDate'
 import type { Stock, TradeRecord } from '@/types'
 
 const stockStore = useStockStore()
 const themeStore = useThemeStore()
 const tradeModeStore = useTradeModeStore()
+const toast = useToast()
 
 const tab = ref<'positions' | 'closed' | 'trades'>('positions')
 
@@ -443,6 +455,180 @@ function saveTrade() {
 
 function deleteTrade(row: TradeRow) {
   stockStore.deleteTradeRecord(row.stockId, row.trade.id)
+}
+
+// ===== 导入交割单 =====
+const importInput = ref<HTMLInputElement | null>(null)
+
+function triggerImport() {
+  importInput.value?.click()
+}
+
+// 解析单行 CSV（支持带引号的字段）
+function parseCsvLine(line: string): string[] {
+  const result: string[] = []
+  let current = ''
+  let inQuotes = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (inQuotes) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') {
+          current += '"'
+          i++
+        } else {
+          inQuotes = false
+        }
+      } else {
+        current += ch
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true
+      } else if (ch === ',') {
+        result.push(current)
+        current = ''
+      } else {
+        current += ch
+      }
+    }
+  }
+  result.push(current)
+  return result
+}
+
+// 成交日期 YYYYMMDD -> YYYY-MM-DD
+function convertDate(d: string): string {
+  const s = d.trim()
+  if (/^\d{8}$/.test(s)) {
+    return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`
+  }
+  return s
+}
+
+// 证券代码补齐 6 位（券商交割单会去除深圳前导零）
+function normalizeCode(code: string): string {
+  const c = code.trim()
+  return c.length < 6 ? c.padStart(6, '0') : c
+}
+
+// 清理证券名称中的空格（如 "金 螳 螂"）
+function cleanName(name: string): string {
+  return name.replace(/\s+/g, '')
+}
+
+async function onImportFile(event: Event) {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+
+  try {
+    const text = await file.text()
+    const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter(l => l.trim())
+    if (lines.length < 2) {
+      toast.error('CSV 文件为空或格式不正确')
+      return
+    }
+
+    const header = parseCsvLine(lines[0])
+    const colIdx = (name: string) => header.findIndex(h => h.trim() === name)
+    const idxDate = colIdx('成交日期')
+    const idxTime = colIdx('成交时间')
+    const idxCode = colIdx('证券代码')
+    const idxName = colIdx('证券名称')
+    const idxOp = colIdx('操作')
+    const idxQty = colIdx('成交数量')
+    const idxPrice = colIdx('成交均价')
+
+    if (idxDate < 0 || idxCode < 0 || idxOp < 0 || idxQty < 0 || idxPrice < 0) {
+      toast.error('CSV 列不匹配，需包含：成交日期、证券代码、操作、成交数量、成交均价')
+      return
+    }
+
+    // 导入交易默认归为「其他」模式
+    const otherMode = tradeModeStore.tradeModes.find(m => m.name === '其他')
+    const defaultModeId = otherMode?.id || tradeModeStore.tradeModes[0]?.id || ''
+
+    // 预建 代码 -> stockId 与 名称 -> stockId 映射，用于按代码或名称匹配已有个股
+    const stockByCode = new Map<string, string>()
+    const stockByName = new Map<string, string>()
+    for (const s of stockStore.stocks) {
+      if (s.code) stockByCode.set(s.code, s.id)
+      if (s.name) stockByName.set(s.name, s.id)
+    }
+
+    let imported = 0
+    let skipped = 0
+    let newStocks = 0
+
+    for (let i = 1; i < lines.length; i++) {
+      const fields = parseCsvLine(lines[i])
+      const op = (fields[idxOp] || '').trim()
+
+      let direction: 'buy' | 'sell'
+      if (op === '证券买入') direction = 'buy'
+      else if (op === '证券卖出') direction = 'sell'
+      else { skipped++; continue }
+
+      const code = normalizeCode(fields[idxCode] || '')
+      const name = cleanName(fields[idxName] || code)
+      const date = convertDate(fields[idxDate] || '')
+      const time = idxTime >= 0 ? (fields[idxTime] || '').trim() : ''
+      // 交易时间 = 日期 + 时间，作为去重唯一标识
+      const tradeTime = time ? `${date} ${time}` : date
+      const price = parseFloat(fields[idxPrice] || '0')
+      const quantity = parseInt((fields[idxQty] || '0').replace(/[^\d-]/g, ''), 10)
+
+      if (!code || !date || price <= 0 || quantity <= 0) { skipped++; continue }
+
+      // 查找已有个股：优先按代码匹配，其次按名称匹配
+      let stockId = stockByCode.get(code) || stockByName.get(name)
+      if (!stockId) {
+        stockStore.addStock({
+          name,
+          code,
+          themeId: '',
+          role: 'follower',
+          tags: []
+        })
+        const newStock = stockStore.stocks[stockStore.stocks.length - 1]
+        stockId = newStock.id
+        stockByCode.set(code, stockId)
+        stockByName.set(name, stockId)
+        newStocks++
+      }
+
+      // 去重：以 证券代码/名称 + 交易时间（日期+时间）作为唯一标识
+      const stock = stockStore.getStock(stockId)
+      const isDup = stock?.trades.some(t =>
+        t.date === date &&
+        t.note === tradeTime
+      )
+      if (isDup) { skipped++; continue }
+
+      stockStore.addTradeRecord(stockId, {
+        date,
+        direction,
+        price,
+        quantity,
+        modeId: defaultModeId,
+        note: tradeTime
+      })
+      imported++
+    }
+
+    if (imported > 0) {
+      tab.value = 'trades'
+      toast.success(`成功导入 ${imported} 条交易记录（新增 ${newStocks} 只个股）${skipped ? `，跳过 ${skipped} 条` : ''}`)
+    } else {
+      toast.info(`未导入新记录${skipped ? `，跳过 ${skipped} 条重复或无效记录` : ''}`)
+    }
+  } catch (e) {
+    console.error('导入交割单失败:', e)
+    toast.error('导入失败，请检查文件格式')
+  } finally {
+    target.value = ''
+  }
 }
 
 // 模式选择下拉菜单
@@ -687,6 +873,32 @@ function updatePrice(stockId: string, event: Event) {
 
 .btn-add-trade:hover {
   opacity: 0.85;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-import {
+  padding: 6px 16px;
+  font-size: 13px;
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-import:hover {
+  border-color: var(--color-blue);
+  color: var(--color-blue);
+}
+
+.hidden-file-input {
+  display: none;
 }
 
 .overview-grid {
