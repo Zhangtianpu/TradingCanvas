@@ -180,6 +180,37 @@
         <div class="batch-bar" v-else>
           <button class="btn-sel-all" @click="selectAllTrades">全选</button>
           <button class="btn-del-all" @click="deleteAllTrades">全部删除</button>
+          <div class="sort-group">
+            <span class="sort-label">排序:</span>
+            <button 
+              class="sort-btn" 
+              :class="{ active: tradeSortBy === 'date' }" 
+              @click="toggleSort('date')"
+            >
+              时间{{ tradeSortBy === 'date' ? (tradeSortAsc ? '↑' : '↓') : '' }}
+            </button>
+            <button 
+              class="sort-btn" 
+              :class="{ active: tradeSortBy === 'stock' }" 
+              @click="toggleSort('stock')"
+            >
+              个股{{ tradeSortBy === 'stock' ? (tradeSortAsc ? '↑' : '↓') : '' }}
+            </button>
+            <button 
+              class="sort-btn" 
+              :class="{ active: tradeSortBy === 'theme' }" 
+              @click="toggleSort('theme')"
+            >
+              题材{{ tradeSortBy === 'theme' ? (tradeSortAsc ? '↑' : '↓') : '' }}
+            </button>
+            <button 
+              class="sort-btn" 
+              :class="{ active: tradeSortBy === 'mode' }" 
+              @click="toggleSort('mode')"
+            >
+              模式{{ tradeSortBy === 'mode' ? (tradeSortAsc ? '↑' : '↓') : '' }}
+            </button>
+          </div>
         </div>
         <table class="trade-table">
           <thead>
@@ -200,7 +231,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="t in allTrades" :key="t.trade.id" :class="{ selected: selectedTradeIds.has(t.trade.id) }">
+            <tr v-for="t in sortedTrades" :key="t.trade.id" :class="{ selected: selectedTradeIds.has(t.trade.id) }">
               <td class="td-check">
                 <input type="checkbox" :checked="selectedTradeIds.has(t.trade.id)" @change="toggleTradeSelect(t.trade.id)" />
               </td>
@@ -519,6 +550,42 @@ function deleteAllTrades() {
   selectedTradeIds.value.clear()
   toast.success('已删除全部记录')
 }
+
+// ===== 排序功能 =====
+const tradeSortBy = ref<'date' | 'stock' | 'theme' | 'mode'>('date')
+const tradeSortAsc = ref(false) // 默认时间降序（最新在前）
+
+function toggleSort(field: 'date' | 'stock' | 'theme' | 'mode') {
+  if (tradeSortBy.value === field) {
+    tradeSortAsc.value = !tradeSortAsc.value
+  } else {
+    tradeSortBy.value = field
+    tradeSortAsc.value = false // 切换字段默认降序
+  }
+}
+
+const sortedTrades = computed(() => {
+  const rows = [...allTrades.value]
+  const field = tradeSortBy.value
+  const asc = tradeSortAsc.value
+
+  rows.sort((a, b) => {
+    let cmp = 0
+    if (field === 'date') {
+      cmp = a.trade.date.localeCompare(b.trade.date)
+    } else if (field === 'stock') {
+      cmp = a.stockName.localeCompare(b.stockName, 'zh-CN')
+    } else if (field === 'theme') {
+      cmp = a.themeName.localeCompare(b.themeName, 'zh-CN')
+    } else if (field === 'mode') {
+      const aMode = getModeName(a.trade.modeId)
+      const bMode = getModeName(b.trade.modeId)
+      cmp = aMode.localeCompare(bMode, 'zh-CN')
+    }
+    return asc ? cmp : -cmp
+  })
+  return rows
+})
 
 // ===== 导入交割单 =====
 const importInput = ref<HTMLInputElement | null>(null)
@@ -1373,6 +1440,40 @@ function updatePrice(stockId: string, event: Event) {
 .btn-batch-del:hover,
 .btn-del-all:hover {
   background: rgba(248,81,73,0.2);
+}
+
+.sort-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.sort-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.sort-btn {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.sort-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
+}
+
+.sort-btn.active {
+  color: var(--color-blue);
+  border-color: var(--color-blue);
+  background: rgba(88,166,255,0.1);
 }
 
 .trade-table {
