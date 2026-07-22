@@ -1,131 +1,158 @@
 <template>
   <div class="dashboard">
-    <!-- 空间板 -->
-    <div class="space-board-card">
-      <div class="space-left">
-        <div class="space-label">最高板</div>
-        <div class="space-height">{{ latestEmotion?.maxBoardHeight ?? '-' }}</div>
-        <div class="space-unit">板</div>
-      </div>
-      <div class="space-right">
-        <div class="space-stocks">
-          <span v-for="(s, idx) in latestEmotion?.spaceBoardStocks" :key="idx" class="stock-tag">
-            {{ s.name }}({{ s.height }}板)
-          </span>
-          <span v-if="!latestEmotion?.spaceBoardStocks?.length">-</span>
-        </div>
-        <div class="space-status" :class="{ active: latestEmotion?.isBreakthrough }">
-          {{ latestEmotion?.isBreakthrough ? '高度突破' : '未突破' }}
-        </div>
-      </div>
-    </div>
+    <div class="dashboard-grid">
+      <div
+        v-for="module in sortedModules"
+        :key="module.id"
+        class="dashboard-module"
+        :class="{ dragging: dragId === module.id }"
+        draggable="true"
+        @dragstart="onDragStart(module.id, $event)"
+        @dragend="onDragEnd"
+        @dragover.prevent
+        @drop="onDrop(module.id, $event)"
+      >
+        <!-- 拖拽手柄 -->
+        <div class="module-drag-handle" title="拖动排序">⋮⋮</div>
 
-    <!-- 连板楼梯图 -->
-    <StairChart v-if="recentEmotions.length > 0" :emotions="recentEmotions" />
-
-    <!-- 趋势图表 -->
-    <div class="charts-section" v-if="recentEmotions.length > 0">
-      <!-- 时间范围选择 -->
-      <div class="chart-controls">
-        <span class="control-label">显示范围：</span>
-        <button
-          v-for="r in timeRanges"
-          :key="r.value"
-          class="range-btn"
-          :class="{ active: selectedRange === r.value }"
-          @click="selectedRange = r.value"
-        >{{ r.label }}</button>
-        <div class="custom-range">
-          <input
-            type="number"
-            v-model.number="customRange"
-            min="1"
-            max="365"
-            class="range-input"
-            placeholder="天数"
-          />
-          <button class="range-btn" @click="applyCustomRange">确定</button>
-        </div>
-      </div>
-
-      <!-- 分组图表 -->
-      <div class="chart-groups">
-        <div v-for="group in chartGroups" :key="group.name" class="chart-group">
-          <div class="group-header">
-            <span class="group-name">{{ group.name }}</span>
-          </div>
-          <div class="charts-grid">
-            <div
-              v-for="chart in group.charts"
-              :key="chart.key"
-              class="chart-card"
-              :class="{ expanded: expandedChartKey === chart.key }"
-              @click="toggleExpand(chart.key)"
-            >
-              <div class="chart-title">
-                {{ chart.title }}
-                <span class="expand-icon">{{ expandedChartKey === chart.key ? '⊖' : '⊕' }}</span>
+        <!-- 空间板 -->
+        <template v-if="module.id === 'spaceBoard'">
+          <div class="space-board-card">
+            <div class="space-left">
+              <div class="space-label">最高板</div>
+              <div class="space-height">{{ latestEmotion?.maxBoardHeight ?? '-' }}</div>
+              <div class="space-unit">板</div>
+            </div>
+            <div class="space-right">
+              <div class="space-stocks">
+                <span v-for="(s, idx) in latestEmotion?.spaceBoardStocks" :key="idx" class="stock-tag">
+                  {{ s.name }}({{ s.height }}板)
+                </span>
+                <span v-if="!latestEmotion?.spaceBoardStocks?.length">-</span>
               </div>
-              <div class="chart-container" :class="{ expanded: expandedChartKey === chart.key }">
-                <canvas :ref="el => setChartRef(chart.key, el)"></canvas>
+              <div class="space-status" :class="{ active: latestEmotion?.isBreakthrough }">
+                {{ latestEmotion?.isBreakthrough ? '高度突破' : '未突破' }}
               </div>
             </div>
           </div>
-        </div>
+        </template>
+
+        <!-- 连板楼梯图 -->
+        <template v-else-if="module.id === 'stairChart'">
+          <StairChart v-if="recentEmotions.length > 0" :emotions="recentEmotions" />
+        </template>
+
+        <!-- 趋势图表 -->
+        <template v-else-if="module.id === 'charts'">
+          <div class="charts-section" v-if="recentEmotions.length > 0">
+            <!-- 时间范围选择 -->
+            <div class="chart-controls">
+              <span class="control-label">显示范围：</span>
+              <button
+                v-for="r in timeRanges"
+                :key="r.value"
+                class="range-btn"
+                :class="{ active: selectedRange === r.value }"
+                @click="selectedRange = r.value"
+              >{{ r.label }}</button>
+              <div class="custom-range">
+                <input
+                  type="number"
+                  v-model.number="customRange"
+                  min="1"
+                  max="365"
+                  class="range-input"
+                  placeholder="天数"
+                />
+                <button class="range-btn" @click="applyCustomRange">确定</button>
+              </div>
+            </div>
+
+            <!-- 分组图表 -->
+            <div class="chart-groups">
+              <div v-for="group in chartGroups" :key="group.name" class="chart-group">
+                <div class="group-header">
+                  <span class="group-name">{{ group.name }}</span>
+                </div>
+                <div class="charts-grid">
+                  <div
+                    v-for="chart in group.charts"
+                    :key="chart.key"
+                    class="chart-card"
+                    :class="{ expanded: expandedChartKey === chart.key }"
+                    @click="toggleExpand(chart.key)"
+                  >
+                    <div class="chart-title">
+                      {{ chart.title }}
+                      <span class="expand-icon">{{ expandedChartKey === chart.key ? '⊖' : '⊕' }}</span>
+                    </div>
+                    <div class="chart-container" :class="{ expanded: expandedChartKey === chart.key }">
+                      <canvas :ref="el => setChartRef(chart.key, el)"></canvas>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- 历史记录 -->
+        <template v-else-if="module.id === 'history'">
+          <div class="card history-card">
+            <div class="section-header" @click="historyCollapsed = !historyCollapsed">
+              <div class="section-title">历史记录</div>
+              <span class="collapse-icon">{{ historyCollapsed ? '▶' : '▼' }}</span>
+            </div>
+            <div v-if="!historyCollapsed">
+              <div v-if="emotionStore.sortedEmotions.length === 0" class="empty-hint">暂无数据</div>
+              <div v-else class="history-table-wrapper">
+                <table class="history-table">
+                  <thead>
+                    <tr>
+                      <th>日期</th>
+                      <th>上证</th>
+                      <th>上涨</th>
+                      <th>下跌</th>
+                      <th>涨停</th>
+                      <th>跌停</th>
+                      <th>最高板</th>
+                      <th>个股</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="e in emotionStore.sortedEmotions" :key="e.id" :class="{ today: e.date === today() }">
+                      <td class="date-col">{{ e.date.slice(5) }}</td>
+                      <td :class="e.shChange >= 0 ? 'up' : 'down'">
+                        {{ e.shChange >= 0 ? '+' : '' }}{{ (e.shChange || 0).toFixed(2) }}%
+                      </td>
+                      <td class="up">{{ e.upCount || '-' }}</td>
+                      <td class="down">{{ e.downCount || '-' }}</td>
+                      <td class="up">{{ e.limitUpCount || '-' }}</td>
+                      <td class="down">{{ e.limitDownCount || '-' }}</td>
+                      <td class="height-col" :class="{ breakthrough: e.isBreakthrough }">
+                        {{ e.maxBoardHeight || '-' }}板
+                        <span v-if="e.isBreakthrough" class="breakthrough-tag">破</span>
+                      </td>
+                      <td class="stock-col">
+                        <span v-for="(s, idx) in e.spaceBoardStocks" :key="idx" class="stock-item">
+                          {{ s.name }}({{ s.height }})
+                        </span>
+                        <span v-if="!e.spaceBoardStocks?.length">-</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- 活跃题材 -->
+        <template v-else-if="module.id === 'themes'">
+          <ThemeTree />
+        </template>
       </div>
     </div>
-
-    <!-- 历史记录 -->
-    <div class="card history-card">
-      <div class="section-header" @click="historyCollapsed = !historyCollapsed">
-        <div class="section-title">历史记录</div>
-        <span class="collapse-icon">{{ historyCollapsed ? '▶' : '▼' }}</span>
-      </div>
-      <div v-if="!historyCollapsed">
-        <div v-if="emotionStore.sortedEmotions.length === 0" class="empty-hint">暂无数据</div>
-        <div v-else class="history-table-wrapper">
-          <table class="history-table">
-            <thead>
-              <tr>
-                <th>日期</th>
-                <th>上证</th>
-                <th>上涨</th>
-                <th>下跌</th>
-                <th>涨停</th>
-                <th>跌停</th>
-                <th>最高板</th>
-                <th>个股</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="e in emotionStore.sortedEmotions" :key="e.id" :class="{ today: e.date === today() }">
-                <td class="date-col">{{ e.date.slice(5) }}</td>
-                <td :class="e.shChange >= 0 ? 'up' : 'down'">
-                  {{ e.shChange >= 0 ? '+' : '' }}{{ (e.shChange || 0).toFixed(2) }}%
-                </td>
-                <td class="up">{{ e.upCount || '-' }}</td>
-                <td class="down">{{ e.downCount || '-' }}</td>
-                <td class="up">{{ e.limitUpCount || '-' }}</td>
-                <td class="down">{{ e.limitDownCount || '-' }}</td>
-                <td class="height-col" :class="{ breakthrough: e.isBreakthrough }">
-                  {{ e.maxBoardHeight || '-' }}板
-                  <span v-if="e.isBreakthrough" class="breakthrough-tag">破</span>
-                </td>
-                <td class="stock-col">
-                  <span v-for="(s, idx) in e.spaceBoardStocks" :key="idx" class="stock-item">
-                    {{ s.name }}({{ s.height }})
-                  </span>
-                  <span v-if="!e.spaceBoardStocks?.length">-</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- 活跃题材 -->
-    <ThemeTree />
   </div>
 </template>
 
@@ -135,7 +162,6 @@ import { useThemeStore } from '@/stores/theme'
 import { useStockStore } from '@/stores/stock'
 import { useEmotionStore } from '@/stores/emotion'
 import { useReviewStore } from '@/stores/review'
-import { type EmotionPhase } from '@/types'
 import { today } from '@/composables/useDate'
 import {
   Chart as ChartJS,
@@ -169,6 +195,78 @@ const themeStore = useThemeStore()
 const stockStore = useStockStore()
 const emotionStore = useEmotionStore()
 const reviewStore = useReviewStore()
+
+// ===== 模块拖拽排序 =====
+interface DashboardModule {
+  id: string
+  name: string
+}
+
+const defaultModules: DashboardModule[] = [
+  { id: 'spaceBoard', name: '空间板' },
+  { id: 'stairChart', name: '连板楼梯图' },
+  { id: 'charts', name: '趋势图表' },
+  { id: 'history', name: '历史记录' },
+  { id: 'themes', name: '活跃题材' }
+]
+
+const moduleOrder = ref<string[]>([])
+
+function loadModuleOrder() {
+  const saved = localStorage.getItem('dashboardModuleOrder')
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved)
+      if (Array.isArray(parsed) && parsed.length === defaultModules.length) {
+        moduleOrder.value = parsed
+        return
+      }
+    } catch {}
+  }
+  moduleOrder.value = defaultModules.map(m => m.id)
+}
+
+function saveModuleOrder() {
+  localStorage.setItem('dashboardModuleOrder', JSON.stringify(moduleOrder.value))
+}
+
+const sortedModules = computed(() => {
+  return moduleOrder.value.map(id => defaultModules.find(m => m.id === id)!).filter(Boolean)
+})
+
+const dragId = ref<string | null>(null)
+const dropTargetId = ref<string | null>(null)
+
+function onDragStart(id: string, e: DragEvent) {
+  dragId.value = id
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', id)
+  }
+}
+
+function onDragEnd() {
+  dragId.value = null
+  dropTargetId.value = null
+}
+
+function onDrop(targetId: string, e: DragEvent) {
+  if (!dragId.value || dragId.value === targetId) return
+
+  const fromIndex = moduleOrder.value.indexOf(dragId.value)
+  const toIndex = moduleOrder.value.indexOf(targetId)
+
+  if (fromIndex !== -1 && toIndex !== -1) {
+    const newOrder = [...moduleOrder.value]
+    newOrder.splice(fromIndex, 1)
+    newOrder.splice(toIndex, 0, dragId.value)
+    moduleOrder.value = newOrder
+    saveModuleOrder()
+  }
+}
+
+// 初始化加载排序
+loadModuleOrder()
 
 // 图表配置
 const chartConfigs = [
@@ -444,6 +542,47 @@ watch(() => emotionStore.sortedEmotions.length, async () => {
 </script>
 
 <style scoped>
+/* 模块拖拽 */
+.dashboard-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dashboard-module {
+  position: relative;
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+.dashboard-module.dragging {
+  opacity: 0.5;
+  transform: scale(0.98);
+}
+
+.module-drag-handle {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 4px 8px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  cursor: grab;
+  font-size: 12px;
+  color: var(--text-secondary);
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 10;
+  user-select: none;
+}
+
+.dashboard-module:hover .module-drag-handle {
+  opacity: 1;
+}
+
+.module-drag-handle:active {
+  cursor: grabbing;
+}
+
 .section-title {
   font-weight: 500;
   margin-bottom: 12px;
