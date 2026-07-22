@@ -20,31 +20,6 @@
       </div>
     </div>
 
-    <!-- 接力结构 -->
-    <div class="card relay-card">
-      <div class="section-title">接力结构</div>
-      <div class="relay-grid">
-        <div class="relay-item" v-for="r in relayData" :key="r.level">
-          <span class="relay-level">{{ r.level }}</span>
-          <span class="relay-count">{{ r.count || '-' }}</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- 情绪阶段 -->
-    <div class="card" v-if="latestEmotion">
-      <div class="section-title">情绪阶段</div>
-      <div class="phase-bar">
-        <div
-          v-for="p in phases" :key="p.key"
-          class="phase-item"
-          :class="{ active: latestEmotion.phase === p.key }"
-        >
-          {{ p.label }}
-        </div>
-      </div>
-    </div>
-
     <!-- 连板楼梯图 -->
     <StairChart v-if="recentEmotions.length > 0" :emotions="recentEmotions" />
 
@@ -60,6 +35,17 @@
           :class="{ active: selectedRange === r.value }"
           @click="selectedRange = r.value"
         >{{ r.label }}</button>
+        <div class="custom-range">
+          <input
+            type="number"
+            v-model.number="customRange"
+            min="1"
+            max="365"
+            class="range-input"
+            placeholder="天数"
+          />
+          <button class="range-btn" @click="applyCustomRange">确定</button>
+        </div>
       </div>
 
       <!-- 分组图表 -->
@@ -91,45 +77,50 @@
 
     <!-- 历史记录 -->
     <div class="card history-card">
-      <div class="section-title">历史记录</div>
-      <div v-if="emotionStore.sortedEmotions.length === 0" class="empty-hint">暂无数据</div>
-      <div v-else class="history-table-wrapper">
-        <table class="history-table">
-          <thead>
-            <tr>
-              <th>日期</th>
-              <th>上证</th>
-              <th>上涨</th>
-              <th>下跌</th>
-              <th>涨停</th>
-              <th>跌停</th>
-              <th>最高板</th>
-              <th>个股</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="e in emotionStore.sortedEmotions" :key="e.id" :class="{ today: e.date === today() }">
-              <td class="date-col">{{ e.date.slice(5) }}</td>
-              <td :class="e.shChange >= 0 ? 'up' : 'down'">
-                {{ e.shChange >= 0 ? '+' : '' }}{{ (e.shChange || 0).toFixed(2) }}%
-              </td>
-              <td class="up">{{ e.upCount || '-' }}</td>
-              <td class="down">{{ e.downCount || '-' }}</td>
-              <td class="up">{{ e.limitUpCount || '-' }}</td>
-              <td class="down">{{ e.limitDownCount || '-' }}</td>
-              <td class="height-col" :class="{ breakthrough: e.isBreakthrough }">
-                {{ e.maxBoardHeight || '-' }}板
-                <span v-if="e.isBreakthrough" class="breakthrough-tag">破</span>
-              </td>
-              <td class="stock-col">
-                <span v-for="(s, idx) in e.spaceBoardStocks" :key="idx" class="stock-item">
-                  {{ s.name }}({{ s.height }})
-                </span>
-                <span v-if="!e.spaceBoardStocks?.length">-</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <div class="section-header" @click="historyCollapsed = !historyCollapsed">
+        <div class="section-title">历史记录</div>
+        <span class="collapse-icon">{{ historyCollapsed ? '▶' : '▼' }}</span>
+      </div>
+      <div v-if="!historyCollapsed">
+        <div v-if="emotionStore.sortedEmotions.length === 0" class="empty-hint">暂无数据</div>
+        <div v-else class="history-table-wrapper">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>日期</th>
+                <th>上证</th>
+                <th>上涨</th>
+                <th>下跌</th>
+                <th>涨停</th>
+                <th>跌停</th>
+                <th>最高板</th>
+                <th>个股</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="e in emotionStore.sortedEmotions" :key="e.id" :class="{ today: e.date === today() }">
+                <td class="date-col">{{ e.date.slice(5) }}</td>
+                <td :class="e.shChange >= 0 ? 'up' : 'down'">
+                  {{ e.shChange >= 0 ? '+' : '' }}{{ (e.shChange || 0).toFixed(2) }}%
+                </td>
+                <td class="up">{{ e.upCount || '-' }}</td>
+                <td class="down">{{ e.downCount || '-' }}</td>
+                <td class="up">{{ e.limitUpCount || '-' }}</td>
+                <td class="down">{{ e.limitDownCount || '-' }}</td>
+                <td class="height-col" :class="{ breakthrough: e.isBreakthrough }">
+                  {{ e.maxBoardHeight || '-' }}板
+                  <span v-if="e.isBreakthrough" class="breakthrough-tag">破</span>
+                </td>
+                <td class="stock-col">
+                  <span v-for="(s, idx) in e.spaceBoardStocks" :key="idx" class="stock-item">
+                    {{ s.name }}({{ s.height }})
+                  </span>
+                  <span v-if="!e.spaceBoardStocks?.length">-</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -209,6 +200,17 @@ const timeRanges = [
   { label: '30天', value: 30 }
 ]
 const selectedRange = ref(20)
+const customRange = ref<number | null>(null)
+
+// 历史记录折叠状态
+const historyCollapsed = ref(false)
+
+function applyCustomRange() {
+  if (customRange.value && customRange.value >= 1 && customRange.value <= 365) {
+    selectedRange.value = customRange.value
+    customRange.value = null
+  }
+}
 
 // 图表refs存储
 const chartRefs = ref<Record<string, HTMLCanvasElement | null>>({})
@@ -221,31 +223,10 @@ function setChartRef(key: string, el: any) {
 // 展开的图表
 const expandedChartKey = ref<string | null>(null)
 
-const phases: { key: EmotionPhase; label: string }[] = [
-  { key: 'freeze', label: '冰点' },
-  { key: 'repair', label: '修复' },
-  { key: 'warm', label: '升温' },
-  { key: 'climax', label: '高潮' },
-  { key: 'retreat', label: '退潮' }
-]
-
 const latestEmotion = computed(() => emotionStore.latestEmotion)
 
 const recentEmotions = computed(() => {
   return [...emotionStore.sortedEmotions].reverse().slice(-selectedRange.value)
-})
-
-// 接力结构数据
-const relayData = computed(() => {
-  const e = latestEmotion.value
-  if (!e) return []
-  return [
-    { level: '2板', count: e.board2Count },
-    { level: '3板', count: e.board3Count },
-    { level: '4板', count: e.board4Count },
-    { level: '5板', count: e.board5Count },
-    { level: '6+板', count: e.board6PlusCount }
-  ]
 })
 
 // 图表通用配置
@@ -672,6 +653,29 @@ watch(() => emotionStore.sortedEmotions.length, async () => {
   border-color: var(--color-blue);
 }
 
+.custom-range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+}
+
+.range-input {
+  width: 60px;
+  padding: 4px 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+  text-align: center;
+}
+
+.range-input:focus {
+  outline: none;
+  border-color: var(--color-blue);
+}
+
 /* 图表分组 */
 .chart-groups {
   display: flex;
@@ -778,6 +782,25 @@ watch(() => emotionStore.sortedEmotions.length, async () => {
 /* 历史记录 */
 .history-card {
   margin-bottom: 12px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  padding-bottom: 12px;
+  user-select: none;
+}
+
+.section-header:hover .section-title {
+  color: var(--text-primary);
+}
+
+.collapse-icon {
+  font-size: 10px;
+  color: var(--text-secondary);
+  transition: transform 0.2s;
 }
 
 .history-table-wrapper {
