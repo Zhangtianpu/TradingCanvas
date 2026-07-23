@@ -154,6 +154,26 @@ export interface DailyReview {
   updatedAt: string
 }
 
+// 交易风格
+export type TradeStyle = 'trend' | 'board'  // 趋势 | 连板
+
+// 交易风格历史记录
+export interface TradeStyleHistory {
+  id: string
+  style: TradeStyle
+  date: string              // 发生日期
+}
+
+// 情绪周期阶段
+export type CyclePhase = 'start' | 'main' | 'diverge' | 'retreat'  // 启动 | 主升 | 分歧 | 退潮
+
+// 情绪周期历史记录
+export interface CyclePhaseHistory {
+  id: string
+  phase: CyclePhase
+  date: string              // 发生日期
+}
+
 // 应用存储
 export interface AppStorage {
   themes: Theme[]
@@ -161,6 +181,8 @@ export interface AppStorage {
   emotions: EmotionDaily[]
   reviews: DailyReview[]
   tradeModes: CustomTradeMode[]
+  tradeStyleHistory: TradeStyleHistory[]
+  cyclePhaseHistory: CyclePhaseHistory[]
   settings: AppSettings
   appVersion: string
   lastBackupDate: string
@@ -215,5 +237,19 @@ export const EMOTION_PHASE_LABELS: Record<EmotionPhase, string> = {
   'repair': '修复',
   'warm': '升温',
   'climax': '高潮',
+  'retreat': '退潮'
+}
+
+// 交易风格映射
+export const TRADE_STYLE_LABELS: Record<TradeStyle, string> = {
+  'trend': '趋势',
+  'board': '连板'
+}
+
+// 情绪周期阶段映射
+export const CYCLE_PHASE_LABELS: Record<CyclePhase, string> = {
+  'start': '启动',
+  'main': '主升',
+  'diverge': '分歧',
   'retreat': '退潮'
 }

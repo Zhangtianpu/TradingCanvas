@@ -96,6 +96,11 @@
           </div>
         </template>
 
+        <!-- 交易风格与情绪周期 -->
+        <template v-else-if="module.id === 'cycle'">
+          <CyclePanel />
+        </template>
+
         <!-- 历史记录 -->
         <template v-else-if="module.id === 'history'">
           <div class="card history-card">
@@ -177,6 +182,7 @@ import {
 } from 'chart.js'
 import StairChart from '@/components/StairChart.vue'
 import ThemeTree from '@/components/ThemeTree.vue'
+import CyclePanel from '@/components/CyclePanel.vue'
 
 // 注册Chart.js组件
 ChartJS.register(
@@ -205,6 +211,7 @@ interface DashboardModule {
 const defaultModules: DashboardModule[] = [
   { id: 'spaceBoard', name: '空间板' },
   { id: 'stairChart', name: '连板楼梯图' },
+  { id: 'cycle', name: '交易风格与情绪周期' },
   { id: 'charts', name: '趋势图表' },
   { id: 'history', name: '历史记录' },
   { id: 'themes', name: '活跃题材' }

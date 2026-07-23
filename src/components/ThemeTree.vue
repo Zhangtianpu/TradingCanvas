@@ -6,15 +6,17 @@
     </div>
 
     <div class="tree-body" v-if="mainThemes.length > 0">
+      <transition-group name="theme-flip" tag="div">
       <template v-for="mainTheme in mainThemes" :key="mainTheme.id">
         <!-- 主题材时间条 -->
         <div
           class="theme-row"
-          :class="{ ended: !!mainTheme.endDate, dragging: draggedThemeId === mainTheme.id }"
+          :class="{ ended: !!mainTheme.endDate, dragging: draggedThemeId === mainTheme.id, 'drag-over': dragOverThemeId === mainTheme.id }"
           draggable="true"
           @dragstart="onThemeDragStart(mainTheme.id, $event)"
           @dragend="onThemeDragEnd"
-          @dragover.prevent
+          @dragover="onThemeDragOver(mainTheme.id, $event)"
+          @dragleave="onThemeDragLeave(mainTheme.id)"
           @drop="onThemeDrop(mainTheme.id, $event)"
         >
           <div class="theme-bar" :class="[getStatusClass(mainTheme.status), { ended: !!mainTheme.endDate }]">
@@ -222,6 +224,7 @@
           </div>
         </div>
       </template>
+      </transition-group>
     </div>
 
     <!-- 无题材提示 -->
@@ -464,9 +467,9 @@ function deleteStatusHistory() {
 }
 
 const mainThemes = computed(() => {
-  return [...themeStore.themes]
+  // 使用store原始顺序（拖拽排序后的顺序），不按日期重排
+  return themeStore.themes
     .filter(t => activeStatuses.includes(t.status) && t.level === 'main')
-    .sort((a, b) => a.burstDate.localeCompare(b.burstDate))
 })
 
 function getSubThemes(parentId: string) {
@@ -613,6 +616,7 @@ function getStatusDuration(theme: Theme, index: number) {
 
 // ===== 题材拖拽排序 =====
 const draggedThemeId = ref<string | null>(null)
+const dragOverThemeId = ref<string | null>(null)
 
 function onThemeDragStart(themeId: string, e: DragEvent) {
   draggedThemeId.value = themeId
@@ -624,12 +628,28 @@ function onThemeDragStart(themeId: string, e: DragEvent) {
 
 function onThemeDragEnd() {
   draggedThemeId.value = null
+  dragOverThemeId.value = null
+}
+
+function onThemeDragOver(themeId: string, e: DragEvent) {
+  e.preventDefault()
+  if (draggedThemeId.value && draggedThemeId.value !== themeId) {
+    dragOverThemeId.value = themeId
+  }
+}
+
+function onThemeDragLeave(themeId: string) {
+  if (dragOverThemeId.value === themeId) {
+    dragOverThemeId.value = null
+  }
 }
 
 function onThemeDrop(targetId: string, e: DragEvent) {
+  e.preventDefault()
   if (!draggedThemeId.value || draggedThemeId.value === targetId) return
   themeStore.reorderThemes(draggedThemeId.value, targetId)
   draggedThemeId.value = null
+  dragOverThemeId.value = null
 }
 </script>
 
@@ -1230,6 +1250,21 @@ function onThemeDrop(targetId: string, e: DragEvent) {
 
 .btn-save:hover {
   filter: brightness(1.1);
+}
+
+/* 拖拽排序动画 */
+.theme-flip-move {
+  transition: transform 0.4s ease;
+}
+
+.theme-row.dragging {
+  opacity: 0.4;
+  transform: scale(0.98);
+}
+
+.theme-row.drag-over {
+  border-top: 2px solid var(--color-blue);
+  margin-top: 4px;
 }
 
 @media (max-width: 768px) {

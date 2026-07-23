@@ -31,6 +31,8 @@ function createDefaultData(): AppStorage {
     emotions: [],
     reviews: [],
     tradeModes: getDefaultTradeModes(),
+    tradeStyleHistory: [],
+    cyclePhaseHistory: [],
     settings: getDefaultSettings(),
     appVersion: APP_VERSION,
     lastBackupDate: ''
@@ -258,6 +260,8 @@ export function generateTestData(): AppStorage {
     emotions,
     reviews: [],
     tradeModes: getDefaultTradeModes(),
+    tradeStyleHistory: [],
+    cyclePhaseHistory: [],
     settings: getDefaultSettings(),
     appVersion: APP_VERSION,
     lastBackupDate: ''
