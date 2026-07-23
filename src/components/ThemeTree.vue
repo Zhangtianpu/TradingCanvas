@@ -599,8 +599,10 @@ function getStatusDuration(theme: Theme, index: number) {
     // 最后一个状态，持续到今天或题材结束
     end = theme.endDate ? new Date(theme.endDate) : new Date()
   }
-  const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
-  return days > 0 ? `${days}天` : ''
+  // 计算天数，至少显示1天
+  let days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+  days = Math.max(days, 1)
+  return `${days}天`
 }
 
 // ===== 题材拖拽排序 =====
