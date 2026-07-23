@@ -590,24 +590,15 @@ function getDuration(theme: Theme) {
 function getStatusDuration(theme: Theme, index: number) {
   if (!theme.statusHistory || index >= theme.statusHistory.length) return ''
   const history = theme.statusHistory
-  const start = new Date(history[index].date)
-  let end: Date
+  const startDate = history[index].date
+  let endDate: string
   if (index < history.length - 1) {
-    end = new Date(history[index + 1].date)
+    endDate = history[index + 1].date
   } else {
-    end = theme.endDate ? new Date(theme.endDate) : new Date()
+    endDate = theme.endDate || new Date().toISOString().slice(0, 10)
   }
-  // 计算交易日数量（排除周末）
-  let tradingDays = 0
-  const current = new Date(start)
-  while (current <= end) {
-    const dayOfWeek = current.getDay()
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) { // 排除周日(0)和周六(6)
-      tradingDays++
-    }
-    current.setDate(current.getDate() + 1)
-  }
-  tradingDays = Math.max(tradingDays, 1)
+  // 使用交易日计算（排除周末和法定节假日）
+  const tradingDays = countTradingDays(startDate, endDate)
   return `${tradingDays}天`
 }
 
