@@ -63,7 +63,7 @@
           </div>
 
           <!-- 状态变更历史 -->
-          <div class="status-history-bar" v-if="!collapsedThemes.has(mainTheme.id) && mainTheme.statusHistory && mainTheme.statusHistory.length > 1">
+          <div class="status-history-bar" v-if="!collapsedThemes.has(mainTheme.id) && mainTheme.statusHistory && mainTheme.statusHistory.length > 0">
             <div class="status-history-track">
               <template v-for="(sh, si) in mainTheme.statusHistory" :key="si">
                 <div class="status-history-item editable" :class="`shi-${sh.status}`" @click.stop="openEditStatusHistory(mainTheme.id, si)">
@@ -73,6 +73,7 @@
                 </div>
                 <span v-if="si < mainTheme.statusHistory!.length - 1" class="shi-arrow">→</span>
               </template>
+              <button class="btn-add-status" @click.stop="openAddStatusHistory(mainTheme.id)" title="添加状态">+</button>
             </div>
           </div>
 
@@ -169,7 +170,7 @@
               </div>
 
               <!-- 分支题材状态变更历史 -->
-              <div class="status-history-bar sub-history" v-if="!collapsedThemes.has(subTheme.id) && subTheme.statusHistory && subTheme.statusHistory.length > 1">
+              <div class="status-history-bar sub-history" v-if="!collapsedThemes.has(subTheme.id) && subTheme.statusHistory && subTheme.statusHistory.length > 0">
                 <div class="status-history-track">
                   <template v-for="(sh, si) in subTheme.statusHistory" :key="si">
                     <div class="status-history-item editable" :class="`shi-${sh.status}`" @click.stop="openEditStatusHistory(subTheme.id, si)">
@@ -179,6 +180,7 @@
                     </div>
                     <span v-if="si < subTheme.statusHistory!.length - 1" class="shi-arrow">→</span>
                   </template>
+                  <button class="btn-add-status" @click.stop="openAddStatusHistory(subTheme.id)" title="添加状态">+</button>
                 </div>
               </div>
 
@@ -273,8 +275,7 @@
     <div class="edit-modal" v-if="editingStatusHistory" @click.self="editingStatusHistory = null">
       <div class="modal-content">
         <div class="modal-header">
-          <span class="modal-title">编辑状态记录</span>
-          <span class="modal-stock">{{ getStatusLabel(editingStatusHistory.status) }}</span>
+          <span class="modal-title">{{ editingStatusHistory.isNew ? '添加状态记录' : '编辑状态记录' }}</span>
         </div>
         <div class="modal-body">
           <label class="input-label">状态类型</label>
@@ -285,7 +286,7 @@
           <input type="date" v-model="editingStatusHistory.date" class="date-input" />
         </div>
         <div class="modal-footer">
-          <button class="btn-danger-sm" @click="deleteStatusHistory">删除</button>
+          <button v-if="!editingStatusHistory.isNew" class="btn-danger-sm" @click="deleteStatusHistory">删除</button>
           <button class="btn-cancel" @click="editingStatusHistory = null">取消</button>
           <button class="btn-save" @click="saveStatusHistory">保存</button>
         </div>
@@ -392,26 +393,41 @@ function saveThemeDate() {
 }
 
 // 编辑状态历史
-const editingStatusHistory = ref<{ themeId: string; index: number; status: ThemeStatus; date: string } | null>(null)
+const editingStatusHistory = ref<{ themeId: string; index: number; status: ThemeStatus; date: string; isNew?: boolean } | null>(null)
 
 function openEditStatusHistory(themeId: string, index: number) {
   const theme = themeStore.getTheme(themeId)
   if (!theme || !theme.statusHistory || index >= theme.statusHistory.length) return
   const sh = theme.statusHistory[index]
-  editingStatusHistory.value = { themeId, index, status: sh.status, date: sh.date }
+  editingStatusHistory.value = { themeId, index, status: sh.status, date: sh.date, isNew: false }
+}
+
+function openAddStatusHistory(themeId: string) {
+  editingStatusHistory.value = { themeId, index: -1, status: 'burst', date: new Date().toISOString().slice(0, 10), isNew: true }
 }
 
 function saveStatusHistory() {
   if (!editingStatusHistory.value) return
-  const { themeId, index, status, date } = editingStatusHistory.value
+  const { themeId, index, status, date, isNew } = editingStatusHistory.value
   const theme = themeStore.getTheme(themeId)
-  if (!theme || !theme.statusHistory) return
-  const history = [...theme.statusHistory]
-  history[index] = { status, date }
-  const updates: Partial<Theme> = { statusHistory: history }
-  if (index === history.length - 1) {
-    updates.status = status
+  if (!theme) return
+
+  let history = [...(theme.statusHistory || [])]
+  if (isNew) {
+    history.push({ status, date })
+  } else {
+    history[index] = { status, date }
   }
+
+  // 按时间排序
+  history.sort((a, b) => a.date.localeCompare(b.date))
+
+  const updates: Partial<Theme> = { statusHistory: history }
+  // 更新当前状态为最新的状态
+  if (history.length > 0) {
+    updates.status = history[history.length - 1].status
+  }
+
   themeStore.updateTheme(themeId, updates)
   editingStatusHistory.value = null
 }
@@ -421,11 +437,18 @@ function deleteStatusHistory() {
   const { themeId, index } = editingStatusHistory.value
   const theme = themeStore.getTheme(themeId)
   if (!theme || !theme.statusHistory) return
-  const history = theme.statusHistory.filter((_, i) => i !== index)
+
+  let history = theme.statusHistory.filter((_, i) => i !== index)
+
+  // 按时间排序（确保顺序正确）
+  history.sort((a, b) => a.date.localeCompare(b.date))
+
   const updates: Partial<Theme> = { statusHistory: history }
-  if (index === theme.statusHistory.length - 1 && history.length > 0) {
+  // 更新当前状态为最新的状态
+  if (history.length > 0) {
     updates.status = history[history.length - 1].status
   }
+
   themeStore.updateTheme(themeId, updates)
   editingStatusHistory.value = null
 }
@@ -744,6 +767,24 @@ function getDuration(theme: Theme) {
 .status-history-item.editable:hover {
   filter: brightness(1.3);
   transform: scale(1.05);
+}
+
+.btn-add-status {
+  padding: 2px 8px;
+  margin-left: 8px;
+  border-radius: 4px;
+  border: 1px dashed var(--border-color);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-add-status:hover {
+  border-color: var(--color-blue);
+  color: var(--color-blue);
+  background: rgba(88,166,255,0.1);
 }
 
 .shi-dot {
