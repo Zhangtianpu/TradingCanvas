@@ -593,16 +593,22 @@ function getStatusDuration(theme: Theme, index: number) {
   const start = new Date(history[index].date)
   let end: Date
   if (index < history.length - 1) {
-    // 有下一个状态，持续时间到下一个状态开始前
     end = new Date(history[index + 1].date)
   } else {
-    // 最后一个状态，持续到今天或题材结束
     end = theme.endDate ? new Date(theme.endDate) : new Date()
   }
-  // 计算天数，至少显示1天
-  let days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
-  days = Math.max(days, 1)
-  return `${days}天`
+  // 计算交易日数量（排除周末）
+  let tradingDays = 0
+  const current = new Date(start)
+  while (current <= end) {
+    const dayOfWeek = current.getDay()
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) { // 排除周日(0)和周六(6)
+      tradingDays++
+    }
+    current.setDate(current.getDate() + 1)
+  }
+  tradingDays = Math.max(tradingDays, 1)
+  return `${tradingDays}天`
 }
 
 // ===== 题材拖拽排序 =====
