@@ -70,5 +70,15 @@ export const useThemeStore = defineStore('theme', () => {
     themes.value = loadData().themes
   }
 
-  return { themes, sortedThemes, addTheme, updateTheme, deleteTheme, getTheme, addEvent, deleteEvent, reload }
+  function reorderThemes(fromId: string, toId: string) {
+    const fromIdx = themes.value.findIndex(t => t.id === fromId)
+    const toIdx = themes.value.findIndex(t => t.id === toId)
+    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return
+
+    const [moved] = themes.value.splice(fromIdx, 1)
+    themes.value.splice(toIdx, 0, moved)
+    persist()
+  }
+
+  return { themes, sortedThemes, addTheme, updateTheme, deleteTheme, getTheme, addEvent, deleteEvent, reload, reorderThemes }
 })

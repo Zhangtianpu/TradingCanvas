@@ -8,7 +8,15 @@
     <div class="tree-body" v-if="mainThemes.length > 0">
       <template v-for="mainTheme in mainThemes" :key="mainTheme.id">
         <!-- 主题材时间条 -->
-        <div class="theme-row" :class="{ ended: !!mainTheme.endDate }">
+        <div
+          class="theme-row"
+          :class="{ ended: !!mainTheme.endDate, dragging: draggedThemeId === mainTheme.id }"
+          draggable="true"
+          @dragstart="onThemeDragStart(mainTheme.id, $event)"
+          @dragend="onThemeDragEnd"
+          @dragover.prevent
+          @drop="onThemeDrop(mainTheme.id, $event)"
+        >
           <div class="theme-bar" :class="[getStatusClass(mainTheme.status), { ended: !!mainTheme.endDate }]">
             <!-- 左侧：题材信息 -->
             <div class="bar-left">
@@ -70,6 +78,7 @@
                   <span class="shi-dot"></span>
                   <span class="shi-label">{{ getStatusLabel(sh.status) }}</span>
                   <span class="shi-date">{{ sh.date.slice(5) }}</span>
+                  <span class="shi-duration">{{ getStatusDuration(mainTheme, si) }}</span>
                 </div>
                 <span v-if="si < mainTheme.statusHistory!.length - 1" class="shi-arrow">→</span>
               </template>
@@ -177,6 +186,7 @@
                       <span class="shi-dot"></span>
                       <span class="shi-label">{{ getStatusLabel(sh.status) }}</span>
                       <span class="shi-date">{{ sh.date.slice(5) }}</span>
+                      <span class="shi-duration">{{ getStatusDuration(subTheme, si) }}</span>
                     </div>
                     <span v-if="si < subTheme.statusHistory!.length - 1" class="shi-arrow">→</span>
                   </template>
@@ -576,6 +586,43 @@ function getDuration(theme: Theme) {
   const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
   return days > 0 ? days : 1
 }
+
+function getStatusDuration(theme: Theme, index: number) {
+  if (!theme.statusHistory || index >= theme.statusHistory.length) return ''
+  const history = theme.statusHistory
+  const start = new Date(history[index].date)
+  let end: Date
+  if (index < history.length - 1) {
+    // 有下一个状态，持续时间到下一个状态开始前
+    end = new Date(history[index + 1].date)
+  } else {
+    // 最后一个状态，持续到今天或题材结束
+    end = theme.endDate ? new Date(theme.endDate) : new Date()
+  }
+  const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+  return days > 0 ? `${days}天` : ''
+}
+
+// ===== 题材拖拽排序 =====
+const draggedThemeId = ref<string | null>(null)
+
+function onThemeDragStart(themeId: string, e: DragEvent) {
+  draggedThemeId.value = themeId
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', themeId)
+  }
+}
+
+function onThemeDragEnd() {
+  draggedThemeId.value = null
+}
+
+function onThemeDrop(targetId: string, e: DragEvent) {
+  if (!draggedThemeId.value || draggedThemeId.value === targetId) return
+  themeStore.reorderThemes(draggedThemeId.value, targetId)
+  draggedThemeId.value = null
+}
 </script>
 
 <style scoped>
@@ -603,6 +650,9 @@ function getDuration(theme: Theme) {
 /* 主题材行 */
 .theme-row { margin-bottom: 14px; }
 .theme-row.ended { opacity: 0.6; }
+.theme-row.dragging { opacity: 0.5; }
+.theme-row[draggable="true"] { cursor: grab; }
+.theme-row[draggable="true"]:active { cursor: grabbing; }
 
 /* 时间条 */
 .theme-bar {
@@ -801,6 +851,15 @@ function getDuration(theme: Theme) {
 .shi-date {
   color: var(--text-tertiary);
   font-size: 10px;
+}
+
+.shi-duration {
+  font-size: 9px;
+  color: var(--text-secondary);
+  margin-left: 4px;
+  padding: 1px 4px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
 }
 
 .shi-arrow {
