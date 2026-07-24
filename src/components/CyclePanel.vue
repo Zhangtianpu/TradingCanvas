@@ -24,9 +24,9 @@
             :class="`style-${seg.style}`"
             :style="{ width: seg.width + '%', left: seg.left + '%' }"
             @click="openEditTradeStyle(seg)"
-            :title="`${getTradeStyleLabel(seg.style)} | ${seg.date.slice(5)} ~ ${seg.endDate.slice(5)} | ${seg.days}天`"
+            :title="`${getTradeStyleLabel(seg.style!)} | ${seg.date.slice(5)} ~ ${seg.endDate.slice(5)} | ${seg.days}天`"
           >
-            <span class="block-label">{{ getTradeStyleLabel(seg.style) }}</span>
+            <span class="block-label">{{ getTradeStyleLabel(seg.style!) }}</span>
             <span class="block-days">{{ seg.days }}天</span>
           </div>
         </div>
@@ -64,9 +64,9 @@
             :class="`phase-${seg.phase}`"
             :style="{ width: seg.width + '%', left: seg.left + '%' }"
             @click="openEditCyclePhase(seg)"
-            :title="`${getCyclePhaseLabel(seg.phase)} | ${seg.date.slice(5)} ~ ${seg.endDate.slice(5)} | ${seg.days}天`"
+            :title="`${getCyclePhaseLabel(seg.phase!)} | ${seg.date.slice(5)} ~ ${seg.endDate.slice(5)} | ${seg.days}天`"
           >
-            <span class="block-label">{{ getCyclePhaseLabel(seg.phase) }}</span>
+            <span class="block-label">{{ getCyclePhaseLabel(seg.phase!) }}</span>
             <span class="block-days">{{ seg.days }}天</span>
           </div>
         </div>
