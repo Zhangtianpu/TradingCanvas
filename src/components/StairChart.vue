@@ -10,95 +10,119 @@
         <span class="legend-item"><span class="dot clear"></span>出清</span>
       </div>
     </div>
-    <div class="chart-body" v-if="emotions.length > 0">
+    <!-- 显示范围控制 -->
+    <div class="stair-range-controls">
+      <span class="stair-range-label">显示范围：</span>
+      <button
+        v-for="r in timeRanges"
+        :key="r.value"
+        class="stair-range-btn"
+        :class="{ active: stairRange === r.value }"
+        @click="stairRange = r.value"
+      >{{ r.label }}</button>
+      <div class="stair-custom-range">
+        <input
+          type="number"
+          v-model.number="customStairRange"
+          min="1"
+          max="365"
+          class="stair-range-input"
+          placeholder="天数"
+        />
+        <button class="stair-range-btn" @click="applyCustomStairRange">确定</button>
+      </div>
+    </div>
+    <div class="chart-body" v-if="displayEmotions.length > 0">
       <!-- 高度标签 -->
       <div class="height-labels">
         <div v-for="h in heightRange" :key="h" class="height-label">{{ h }}板</div>
       </div>
       <!-- 表格主体 -->
-      <div class="table-wrapper">
-        <div class="table-scroll" ref="scrollContainerRef" @scroll="onScroll">
-          <table class="stair-table" :style="{ '--cell-width': cellWidth + 'px' }">
-            <thead>
-              <tr>
-                <th
-                  v-for="e in emotions"
-                  :key="e.id"
-                  class="date-header"
-                  :class="{ 'is-clear': e.isClear }"
-                  @click="handleDateClick(e)"
-                  :title="e.isClear ? '点击取消出清标记' : '点击标记为出清'"
-                >
-                  {{ e.date.slice(5) }}
-                  <span v-if="e.isClear" class="clear-badge">清</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="h in heightRange" :key="h">
-                <td
-                  v-for="(e, idx) in emotions"
-                  :key="e.id"
-                  class="cell"
-                  :class="getCellClass(e, h, idx)"
-                  :title="e.remark || ''"
-                >
-                  <template v-if="hasStockAtHeight(e, h)">
-                    <div class="cell-content">
-                      <span
-                        class="stock-name clickable"
-                        @click.stop="handleCellClick(e, h)"
-                        title="点击编辑"
-                      >
-                        {{ getStockAtHeight(e, h)?.name }}
-                      </span>
-                      <div class="badge-row" v-if="h === e.maxBoardHeight">
-                        <span v-if="e.isAnnouncement" class="announcement-badge">公</span>
-                        <span v-if="e.isIcePoint" class="ice-badge">冰</span>
-                        <span v-if="e.isMedian" class="median-badge">中</span>
+      <div class="table-container">
+        <div class="table-wrapper">
+          <div class="table-scroll" ref="scrollContainerRef" @scroll="onScroll">
+            <table class="stair-table" :style="{ '--cell-width': cellWidth + 'px' }">
+              <thead>
+                <tr>
+                  <th
+                    v-for="e in displayEmotions"
+                    :key="e.id"
+                    class="date-header"
+                    :class="{ 'is-clear': e.isClear }"
+                    @click="handleDateClick(e)"
+                    :title="e.isClear ? '点击取消出清标记' : '点击标记为出清'"
+                  >
+                    {{ e.date.slice(5) }}
+                    <span v-if="e.isClear" class="clear-badge">清</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="h in heightRange" :key="h">
+                  <td
+                    v-for="(e, idx) in displayEmotions"
+                    :key="e.id"
+                    class="cell"
+                    :class="getCellClass(e, h, idx)"
+                    :title="e.remark || ''"
+                  >
+                    <template v-if="hasStockAtHeight(e, h)">
+                      <div class="cell-content">
+                        <span
+                          class="stock-name clickable"
+                          @click.stop="handleCellClick(e, h)"
+                          title="点击编辑"
+                        >
+                          {{ getStockAtHeight(e, h)?.name }}
+                        </span>
+                        <div class="badge-row" v-if="h === e.maxBoardHeight">
+                          <span v-if="e.isAnnouncement" class="announcement-badge">公</span>
+                          <span v-if="e.isIcePoint" class="ice-badge">冰</span>
+                          <span v-if="e.isMedian" class="median-badge">中</span>
+                        </div>
                       </div>
-                    </div>
-                    <span class="edit-hint" @click.stop="handleCellClick(e, h)">✎</span>
-                  </template>
-                  <template v-else-if="h === e.maxBoardHeight">
-                    <div class="cell-content">
-                      <span
-                        class="stock-name clickable"
-                        @click.stop="handleCellClick(e, h)"
-                        title="点击编辑"
-                      >
-                        {{ getFirstStock(e)?.name || '-' }}
-                      </span>
-                      <div class="badge-row">
-                        <span v-if="e.isIcePoint" class="ice-badge">冰</span>
-                        <span v-if="e.isMedian" class="median-badge">中</span>
+                      <span class="edit-hint" @click.stop="handleCellClick(e, h)">✎</span>
+                    </template>
+                    <template v-else-if="h === e.maxBoardHeight">
+                      <div class="cell-content">
+                        <span
+                          class="stock-name clickable"
+                          @click.stop="handleCellClick(e, h)"
+                          title="点击编辑"
+                        >
+                          {{ getFirstStock(e)?.name || '-' }}
+                        </span>
+                        <div class="badge-row">
+                          <span v-if="e.isIcePoint" class="ice-badge">冰</span>
+                          <span v-if="e.isMedian" class="median-badge">中</span>
+                        </div>
                       </div>
-                    </div>
-                    <span class="edit-hint" @click.stop="handleCellClick(e, h)">✎</span>
-                  </template>
-                  <template v-else-if="h <= e.maxBoardHeight">
-                    <span class="fill-dot" @click.stop="handleCellClick(e, h)"></span>
-                  </template>
-                  <template v-else-if="h === e.maxBoardHeight + 1">
-                    <span class="add-hint" @click.stop="handleCellClick(e, h)">+</span>
-                  </template>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                      <span class="edit-hint" @click.stop="handleCellClick(e, h)">✎</span>
+                    </template>
+                    <template v-else-if="h <= e.maxBoardHeight">
+                      <span class="fill-dot" @click.stop="handleCellClick(e, h)"></span>
+                    </template>
+                    <template v-else-if="h === e.maxBoardHeight + 1">
+                      <span class="add-hint" @click.stop="handleCellClick(e, h)">+</span>
+                    </template>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
-      <!-- 拖拽滚动条 -->
-      <div
-        v-if="showScrollbar"
-        class="custom-scrollbar"
-        ref="scrollbarRef"
-        @mousedown="onScrollbarMouseDown"
-      >
+        <!-- 拖拽滚动条 -->
         <div
-          class="scrollbar-thumb"
-          :style="{ width: thumbWidth + '%', left: thumbLeft + '%' }"
-        ></div>
+          class="custom-scrollbar"
+          :class="{ 'is-disabled': !showScrollbar }"
+          ref="scrollbarRef"
+          @mousedown="onScrollbarMouseDown"
+        >
+          <div
+            class="scrollbar-thumb"
+            :style="{ width: thumbWidth + '%', left: thumbLeft + '%' }"
+          ></div>
+        </div>
       </div>
     </div>
     <div v-else class="empty-hint">暂无数据</div>
@@ -185,6 +209,28 @@ const router = useRouter()
 const emotionStore = useEmotionStore()
 const stockStore = useStockStore()
 
+// 连板楼梯图独立的显示范围控制
+const timeRanges = [
+  { label: '10天', value: 10 },
+  { label: '20天', value: 20 },
+  { label: '30天', value: 30 },
+  { label: '60天', value: 60 }
+]
+const stairRange = ref(20)
+const customStairRange = ref<number | null>(null)
+
+// 根据独立 range 截取的显示数据（props.emotions 为从旧到新的全部数据）
+const displayEmotions = computed(() => {
+  return props.emotions.slice(-stairRange.value)
+})
+
+function applyCustomStairRange() {
+  if (customStairRange.value && customStairRange.value >= 1 && customStairRange.value <= 365) {
+    stairRange.value = customStairRange.value
+    customStairRange.value = null
+  }
+}
+
 // 拖拽滚动条
 const scrollContainerRef = ref<HTMLElement | null>(null)
 const scrollbarRef = ref<HTMLElement | null>(null)
@@ -192,18 +238,22 @@ const thumbWidth = ref(100)
 const thumbLeft = ref(0)
 const showScrollbar = ref(false)
 const isDragging = ref(false)
+let resizeObserver: ResizeObserver | null = null
 
 function updateScrollbar() {
   const el = scrollContainerRef.value
   if (!el) return
   const { scrollWidth, clientWidth, scrollLeft } = el
-  if (scrollWidth <= clientWidth) {
+  if (scrollWidth <= clientWidth + 1) {
+    // 不需要滚动：thumb 占满轨道，禁用拖动
     showScrollbar.value = false
+    thumbWidth.value = 100
+    thumbLeft.value = 0
     return
   }
   showScrollbar.value = true
   thumbWidth.value = (clientWidth / scrollWidth) * 100
-  thumbLeft.value = (scrollLeft / scrollWidth) * 100
+  thumbLeft.value = (scrollLeft / (scrollWidth - clientWidth)) * (100 - thumbWidth.value)
 }
 
 function onScroll() {
@@ -213,7 +263,7 @@ function onScroll() {
 function onScrollbarMouseDown(e: MouseEvent) {
   const el = scrollContainerRef.value
   const bar = scrollbarRef.value
-  if (!el || !bar) return
+  if (!el || !bar || !showScrollbar.value) return
   isDragging.value = true
   e.preventDefault()
 
@@ -223,7 +273,7 @@ function onScrollbarMouseDown(e: MouseEvent) {
     // 定位到thumb中心
     const thumbRatio = thumbWidth.value / 100
     const targetRatio = Math.max(0, Math.min(1 - thumbRatio, ratio - thumbRatio / 2))
-    el.scrollLeft = targetRatio * el.scrollWidth
+    el.scrollLeft = targetRatio * (el.scrollWidth - el.clientWidth)
     updateScrollbar()
   }
 
@@ -238,17 +288,34 @@ function onScrollbarMouseDown(e: MouseEvent) {
 }
 
 onMounted(() => {
-  updateScrollbar()
+  // 多次延迟更新，确保表格完全渲染
+  nextTick(() => {
+    updateScrollbar()
+    nextTick(updateScrollbar)
+  })
   window.addEventListener('resize', updateScrollbar)
+
+  // 监听容器尺寸变化
+  if (scrollContainerRef.value) {
+    resizeObserver = new ResizeObserver(() => updateScrollbar())
+    resizeObserver.observe(scrollContainerRef.value)
+  }
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', updateScrollbar)
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
 })
 
-watch(() => props.emotions, () => {
-  nextTick(updateScrollbar)
-})
+watch(() => displayEmotions.value, () => {
+  nextTick(() => {
+    updateScrollbar()
+    nextTick(updateScrollbar)
+  })
+}, { deep: true })
 
 // 编辑状态
 const editingCell = ref<{ date: string; height: number; emotion: EmotionDaily } | null>(null)
@@ -265,7 +332,7 @@ const editInputRef = ref<HTMLInputElement | null>(null)
 
 // 计算高度范围（从最高到1）
 const heightRange = computed(() => {
-  const data = props.emotions
+  const data = displayEmotions.value
   if (data.length === 0) return []
   const maxH = Math.max(...data.map(e => e.maxBoardHeight || 0), 7)
   const range = []
@@ -277,7 +344,7 @@ const heightRange = computed(() => {
 
 // 动态计算单元格宽度
 const cellWidth = computed(() => {
-  const count = props.emotions.length
+  const count = displayEmotions.value.length
   if (count <= 7) return 90
   if (count <= 10) return 80
   if (count <= 15) return 70
@@ -483,12 +550,71 @@ function deleteEdit() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .chart-title {
   font-size: 13px;
   font-weight: 500;
+}
+
+/* 显示范围控制 */
+.stair-range-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.stair-range-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.stair-range-btn {
+  padding: 3px 10px;
+  font-size: 12px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.stair-range-btn:hover {
+  border-color: var(--color-blue);
+  color: var(--color-blue);
+}
+
+.stair-range-btn.active {
+  background: var(--color-blue);
+  color: #fff;
+  border-color: var(--color-blue);
+}
+
+.stair-custom-range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+}
+
+.stair-range-input {
+  width: 56px;
+  padding: 3px 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+  text-align: center;
+}
+
+.stair-range-input:focus {
+  outline: none;
+  border-color: var(--color-blue);
 }
 
 .chart-legend {
@@ -537,9 +663,18 @@ function deleteEdit() {
   width: 36px;
 }
 
+/* 表格容器：垂直排列（表格+滚动条） */
+.table-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
 .table-wrapper {
   flex: 1;
   overflow: hidden;
+  min-width: 0;
 }
 
 .table-scroll {
@@ -547,38 +682,51 @@ function deleteEdit() {
 }
 
 /* 隐藏原生滚动条 */
+.table-scroll {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
 .table-scroll::-webkit-scrollbar {
-  height: 4px;
-}
-.table-scroll::-webkit-scrollbar-thumb {
-  background: transparent;
-}
-.table-scroll::-webkit-scrollbar-track {
-  background: transparent;
+  display: none; /* Chrome/Safari */
 }
 
 /* 自定义拖拽滚动条 */
 .custom-scrollbar {
-  height: 8px;
+  height: 10px;
   background: var(--bg-tertiary);
-  border-radius: 4px;
-  margin-top: 6px;
+  border-radius: 5px;
+  margin-top: 8px;
   position: relative;
   cursor: pointer;
   user-select: none;
+  flex-shrink: 0;
 }
 
 .scrollbar-thumb {
   position: absolute;
   height: 100%;
   background: var(--color-blue);
-  border-radius: 4px;
-  opacity: 0.6;
+  border-radius: 5px;
+  opacity: 0.7;
   transition: opacity 0.2s;
 }
 
 .custom-scrollbar:hover .scrollbar-thumb {
   opacity: 1;
+}
+
+/* 禁用状态：内容未溢出时 */
+.custom-scrollbar.is-disabled {
+  cursor: default;
+}
+
+.custom-scrollbar.is-disabled .scrollbar-thumb {
+  background: var(--text-tertiary);
+  opacity: 0.3;
+}
+
+.custom-scrollbar.is-disabled:hover .scrollbar-thumb {
+  opacity: 0.3;
 }
 
 .stair-table {

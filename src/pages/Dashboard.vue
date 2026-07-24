@@ -42,7 +42,7 @@
 
         <!-- 连板楼梯图 -->
         <template v-else-if="module.id === 'stairChart'">
-          <StairChart v-if="recentEmotions.length > 0" :emotions="recentEmotions" :dateRange="selectedRange" />
+          <StairChart v-if="allSortedEmotions.length > 0" :emotions="allSortedEmotions" />
         </template>
 
         <!-- 趋势图表 -->
@@ -348,6 +348,11 @@ const latestEmotion = computed(() => emotionStore.latestEmotion)
 
 const recentEmotions = computed(() => {
   return [...emotionStore.sortedEmotions].reverse().slice(-selectedRange.value)
+})
+
+// 全部情绪数据（从旧到新），供连板楼梯图组件独立控制显示范围
+const allSortedEmotions = computed(() => {
+  return [...emotionStore.sortedEmotions].reverse()
 })
 
 // 图表通用配置
