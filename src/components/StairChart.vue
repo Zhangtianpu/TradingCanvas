@@ -166,6 +166,7 @@ import { useStockStore } from '@/stores/stock'
 
 const props = defineProps<{
   emotions: EmotionDaily[]
+  dateRange?: number
 }>()
 
 const router = useRouter()
