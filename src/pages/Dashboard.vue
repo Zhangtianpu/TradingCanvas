@@ -12,9 +12,6 @@
         @dragover.prevent
         @drop="onDrop(module.id, $event)"
       >
-        <!-- 拖拽手柄 -->
-        <div class="module-drag-handle" title="拖动排序">⋮⋮</div>
-
         <!-- 空间板 -->
         <template v-if="module.id === 'spaceBoard'">
           <div class="space-board-card">
@@ -564,30 +561,6 @@ watch(() => emotionStore.sortedEmotions.length, async () => {
 .dashboard-module.dragging {
   opacity: 0.5;
   transform: scale(0.98);
-}
-
-.module-drag-handle {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  padding: 4px 8px;
-  background: var(--bg-tertiary);
-  border-radius: 4px;
-  cursor: grab;
-  font-size: 12px;
-  color: var(--text-secondary);
-  opacity: 0;
-  transition: opacity 0.2s;
-  z-index: 10;
-  user-select: none;
-}
-
-.dashboard-module:hover .module-drag-handle {
-  opacity: 1;
-}
-
-.module-drag-handle:active {
-  cursor: grabbing;
 }
 
 .section-title {
