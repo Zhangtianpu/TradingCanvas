@@ -2,7 +2,7 @@
   <div class="dashboard">
     <!-- 面板操作按钮 -->
     <div class="panel-toolbar">
-      <span class="toolbar-hint">拖动模块调整顺序 | 点击模块后滚轮缩放时间范围</span>
+      <span class="toolbar-hint">拖动模块调整顺序</span>
       <button class="toolbar-btn save" :class="{ saved: layoutSaved }" @click="saveLayout">{{ layoutSaved ? '已保存' : '保存布局' }}</button>
       <button class="toolbar-btn reset" @click="resetLayout">重置布局</button>
     </div>
@@ -11,14 +11,12 @@
         v-for="module in sortedModules"
         :key="module.id"
         class="dashboard-module"
-        :class="{ dragging: dragId === module.id, active: activeModule === module.id }"
+        :class="{ dragging: dragId === module.id }"
         draggable="true"
         @dragstart="onDragStart(module.id, $event)"
         @dragend="onDragEnd"
         @dragover.prevent
         @drop="onDrop(module.id, $event)"
-        @click="setActiveModule(module.id)"
-        @wheel="onWheel(module.id, $event)"
       >
         <!-- 空间板 -->
         <template v-if="module.id === 'spaceBoard'">
@@ -292,22 +290,6 @@ function resetLayout() {
 
 // 初始化加载排序
 loadModuleOrder()
-
-// 当前激活的模块（用于滚轮缩放）
-const activeModule = ref<string | null>(null)
-
-function setActiveModule(id: string) {
-  activeModule.value = id
-}
-
-// 滚轮缩放时间范围
-function onWheel(id: string, e: WheelEvent) {
-  // 只对有时间范围的模块生效
-  if (id !== 'charts' && id !== 'stairChart') return
-  e.preventDefault()
-  const delta = e.deltaY > 0 ? 5 : -5  // 向下滚动增加范围，向上减少
-  selectedRange.value = Math.max(3, Math.min(120, selectedRange.value + delta))
-}
 
 // 图表配置
 const chartConfigs = [
@@ -655,11 +637,6 @@ watch(() => emotionStore.sortedEmotions.length, async () => {
 .dashboard-module:hover {
   border-color: rgba(88,166,255,0.4);
   box-shadow: 0 0 12px rgba(88,166,255,0.08);
-}
-
-.dashboard-module.active {
-  border-color: var(--color-blue);
-  box-shadow: 0 0 16px rgba(88,166,255,0.15);
 }
 
 .dashboard-module.dragging {
