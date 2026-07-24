@@ -41,7 +41,7 @@
       <div class="table-container">
         <div class="table-wrapper">
           <div class="table-scroll" ref="scrollContainerRef" @scroll="onScroll">
-            <table class="stair-table" :style="{ '--cell-width': cellWidth + 'px' }">
+            <table class="stair-table" :style="{ '--cell-width': cellWidth + 'px', width: displayEmotions.length * cellWidth + 'px' }">
               <thead>
                 <tr>
                   <th
@@ -243,7 +243,12 @@ let resizeObserver: ResizeObserver | null = null
 function updateScrollbar() {
   const el = scrollContainerRef.value
   if (!el) return
+  
+  // 强制重新计算布局
+  el.offsetHeight // 触发 reflow
+  
   const { scrollWidth, clientWidth, scrollLeft } = el
+  
   if (scrollWidth <= clientWidth + 1) {
     // 不需要滚动：thumb 占满轨道，禁用拖动
     showScrollbar.value = false
