@@ -595,15 +595,22 @@ function getStatusDuration(theme: Theme, index: number) {
   const history = theme.statusHistory
   const start = new Date(history[index].date)
   let end: Date
+  let inclusiveEnd = true // 末状态或已结束主题的结束日计入
   if (index < history.length - 1) {
+    // 相邻状态变更：持续天数为两日期差（不含下一状态的开始日）
     end = new Date(history[index + 1].date)
+    inclusiveEnd = false
   } else {
     end = theme.endDate ? new Date(theme.endDate) : new Date()
   }
   // 计算交易日数量（排除周末）
   let tradingDays = 0
   const current = new Date(start)
-  while (current <= end) {
+  // 当 inclusiveEnd=false 时，使用 < end；否则使用 <= end
+  const condition = inclusiveEnd
+    ? (d: Date) => d <= end
+    : (d: Date) => d < end
+  while (condition(current)) {
     const dayOfWeek = current.getDay()
     if (dayOfWeek !== 0 && dayOfWeek !== 6) { // 排除周日(0)和周六(6)
       tradingDays++

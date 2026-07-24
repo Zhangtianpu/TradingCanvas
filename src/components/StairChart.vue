@@ -262,34 +262,63 @@ function updateScrollbar() {
 }
 
 function onScroll() {
-  if (!isDragging.value) updateScrollbar()
+  // 拖动时也需要更新 thumb 位置（提供视觉反馈）
+  updateScrollbar()
 }
 
 function onScrollbarMouseDown(e: MouseEvent) {
   const el = scrollContainerRef.value
   const bar = scrollbarRef.value
+  const thumb = bar?.querySelector('.scrollbar-thumb') as HTMLElement | null
   if (!el || !bar || !showScrollbar.value) return
-  isDragging.value = true
-  e.preventDefault()
-
-  const onMove = (ev: MouseEvent) => {
-    const rect = bar.getBoundingClientRect()
-    const ratio = (ev.clientX - rect.left) / rect.width
-    // 定位到thumb中心
-    const thumbRatio = thumbWidth.value / 100
-    const targetRatio = Math.max(0, Math.min(1 - thumbRatio, ratio - thumbRatio / 2))
-    el.scrollLeft = targetRatio * (el.scrollWidth - el.clientWidth)
-    updateScrollbar()
+  
+  // 判断点击位置是否在 thumb 上
+  const barRect = bar.getBoundingClientRect()
+  const clickX = e.clientX - barRect.left
+  const thumbWidthPx = (thumbWidth.value / 100) * barRect.width
+  const thumbLeftPx = (thumbLeft.value / 100) * barRect.width
+  
+  let dragStartScrollLeft = el.scrollLeft
+  let dragStartClientX = e.clientX
+  
+  if (clickX >= thumbLeftPx && clickX <= thumbLeftPx + thumbWidthPx) {
+    // 点击在 thumb 上：记录 thumb 内偏移，实现精准拖动
+    const thumbOffset = clickX - thumbLeftPx
+    dragStartScrollLeft = el.scrollLeft
+    dragStartClientX = e.clientX
+    
+    isDragging.value = true
+    e.preventDefault()
+    document.body.style.userSelect = 'none'
+    
+    const onMove = (ev: MouseEvent) => {
+      const dx = ev.clientX - dragStartClientX
+      // 将像素位移转换为滚动比例
+      const maxScroll = el.scrollWidth - el.clientWidth
+      // thumb 可移动范围 = 轨道宽度 - thumb 宽度
+      const thumbMovablePx = barRect.width - thumbWidthPx
+      if (thumbMovablePx <= 0) return
+      // 滚动量 = 像素位移 × (最大滚动量 / thumb可移动范围)
+      const scrollDelta = dx * (maxScroll / thumbMovablePx)
+      el.scrollLeft = Math.max(0, Math.min(maxScroll, dragStartScrollLeft + scrollDelta))
+    }
+    
+    const onUp = () => {
+      isDragging.value = false
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  } else {
+    // 点击在轨道空白处：跳转使该位置位于 thumb 中心
+    const thumbCenterRatio = clickX / barRect.width - thumbWidth.value / 200
+    const targetRatio = Math.max(0, Math.min(1 - thumbWidth.value / 100, thumbCenterRatio))
+    const maxScroll = el.scrollWidth - el.clientWidth
+    el.scrollLeft = targetRatio * maxScroll
   }
-
-  const onUp = () => {
-    isDragging.value = false
-    document.removeEventListener('mousemove', onMove)
-    document.removeEventListener('mouseup', onUp)
-  }
-
-  document.addEventListener('mousemove', onMove)
-  document.addEventListener('mouseup', onUp)
 }
 
 onMounted(() => {
