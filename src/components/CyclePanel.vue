@@ -167,7 +167,7 @@ const tradeStyleSegments = computed<Segment[]>(() => {
   if (history.length === 0) return []
 
   const today = new Date().toISOString().slice(0, 10)
-  const segments: Segment[] = []
+  const segments: Array<{ id: string; style: TradeStyle; date: string; endDate: string; days: number }> = []
 
   // 计算每个段的起止时间
   for (let i = 0; i < history.length; i++) {
@@ -201,7 +201,7 @@ const cyclePhaseSegments = computed<Segment[]>(() => {
   if (history.length === 0) return []
 
   const today = new Date().toISOString().slice(0, 10)
-  const segments: Segment[] = []
+  const segments: Array<{ id: string; phase: CyclePhase; date: string; endDate: string; days: number }> = []
 
   for (let i = 0; i < history.length; i++) {
     const start = history[i].date
