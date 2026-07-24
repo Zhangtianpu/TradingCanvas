@@ -17,7 +17,7 @@
       </div>
       <!-- 表格主体 -->
       <div class="table-wrapper">
-        <div class="table-scroll">
+        <div class="table-scroll" ref="scrollContainerRef" @scroll="onScroll">
           <table class="stair-table" :style="{ '--cell-width': cellWidth + 'px' }">
             <thead>
               <tr>
@@ -87,6 +87,18 @@
             </tbody>
           </table>
         </div>
+      </div>
+      <!-- 拖拽滚动条 -->
+      <div
+        v-if="showScrollbar"
+        class="custom-scrollbar"
+        ref="scrollbarRef"
+        @mousedown="onScrollbarMouseDown"
+      >
+        <div
+          class="scrollbar-thumb"
+          :style="{ width: thumbWidth + '%', left: thumbLeft + '%' }"
+        ></div>
       </div>
     </div>
     <div v-else class="empty-hint">暂无数据</div>
@@ -158,7 +170,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import type { EmotionDaily, SpaceBoardStock } from '@/types'
 import { useEmotionStore } from '@/stores/emotion'
@@ -172,6 +184,71 @@ const props = defineProps<{
 const router = useRouter()
 const emotionStore = useEmotionStore()
 const stockStore = useStockStore()
+
+// 拖拽滚动条
+const scrollContainerRef = ref<HTMLElement | null>(null)
+const scrollbarRef = ref<HTMLElement | null>(null)
+const thumbWidth = ref(100)
+const thumbLeft = ref(0)
+const showScrollbar = ref(false)
+const isDragging = ref(false)
+
+function updateScrollbar() {
+  const el = scrollContainerRef.value
+  if (!el) return
+  const { scrollWidth, clientWidth, scrollLeft } = el
+  if (scrollWidth <= clientWidth) {
+    showScrollbar.value = false
+    return
+  }
+  showScrollbar.value = true
+  thumbWidth.value = (clientWidth / scrollWidth) * 100
+  thumbLeft.value = (scrollLeft / scrollWidth) * 100
+}
+
+function onScroll() {
+  if (!isDragging.value) updateScrollbar()
+}
+
+function onScrollbarMouseDown(e: MouseEvent) {
+  const el = scrollContainerRef.value
+  const bar = scrollbarRef.value
+  if (!el || !bar) return
+  isDragging.value = true
+  e.preventDefault()
+
+  const onMove = (ev: MouseEvent) => {
+    const rect = bar.getBoundingClientRect()
+    const ratio = (ev.clientX - rect.left) / rect.width
+    // 定位到thumb中心
+    const thumbRatio = thumbWidth.value / 100
+    const targetRatio = Math.max(0, Math.min(1 - thumbRatio, ratio - thumbRatio / 2))
+    el.scrollLeft = targetRatio * el.scrollWidth
+    updateScrollbar()
+  }
+
+  const onUp = () => {
+    isDragging.value = false
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+  }
+
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
+
+onMounted(() => {
+  updateScrollbar()
+  window.addEventListener('resize', updateScrollbar)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateScrollbar)
+})
+
+watch(() => props.emotions, () => {
+  nextTick(updateScrollbar)
+})
 
 // 编辑状态
 const editingCell = ref<{ date: string; height: number; emotion: EmotionDaily } | null>(null)
@@ -467,6 +544,41 @@ function deleteEdit() {
 
 .table-scroll {
   overflow-x: auto;
+}
+
+/* 隐藏原生滚动条 */
+.table-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+.table-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+.table-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 自定义拖拽滚动条 */
+.custom-scrollbar {
+  height: 8px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  margin-top: 6px;
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+}
+
+.scrollbar-thumb {
+  position: absolute;
+  height: 100%;
+  background: var(--color-blue);
+  border-radius: 4px;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.custom-scrollbar:hover .scrollbar-thumb {
+  opacity: 1;
 }
 
 .stair-table {
