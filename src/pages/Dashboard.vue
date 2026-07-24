@@ -1,5 +1,11 @@
 <template>
   <div class="dashboard">
+    <!-- 面板操作按钮 -->
+    <div class="panel-toolbar">
+      <span class="toolbar-hint">拖动模块可调整顺序</span>
+      <button class="toolbar-btn save" :class="{ saved: layoutSaved }" @click="saveLayout">{{ layoutSaved ? '已保存' : '保存布局' }}</button>
+      <button class="toolbar-btn reset" @click="resetLayout">重置布局</button>
+    </div>
     <div class="dashboard-grid">
       <div
         v-for="module in sortedModules"
@@ -265,8 +271,21 @@ function onDrop(targetId: string, e: DragEvent) {
     newOrder.splice(fromIndex, 1)
     newOrder.splice(toIndex, 0, dragId.value)
     moduleOrder.value = newOrder
-    saveModuleOrder()
   }
+}
+
+// 保存布局
+const layoutSaved = ref(false)
+function saveLayout() {
+  saveModuleOrder()
+  layoutSaved.value = true
+  setTimeout(() => { layoutSaved.value = false }, 2000)
+}
+
+// 重置布局
+function resetLayout() {
+  moduleOrder.value = defaultModules.map(m => m.id)
+  saveModuleOrder()
 }
 
 // 初始化加载排序
@@ -546,6 +565,60 @@ watch(() => emotionStore.sortedEmotions.length, async () => {
 </script>
 
 <style scoped>
+/* 面板工具栏 */
+.panel-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.toolbar-hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-right: auto;
+}
+
+.toolbar-btn {
+  padding: 4px 14px;
+  font-size: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.toolbar-btn:hover {
+  border-color: var(--color-blue);
+  color: var(--color-blue);
+}
+
+.toolbar-btn.save {
+  background: var(--color-blue);
+  color: #fff;
+  border-color: var(--color-blue);
+}
+
+.toolbar-btn.save:hover {
+  filter: brightness(1.1);
+}
+
+.toolbar-btn.save.saved {
+  background: #3fb950;
+  border-color: #3fb950;
+}
+
+.toolbar-btn.reset:hover {
+  border-color: #f85149;
+  color: #f85149;
+}
+
 /* 模块拖拽 */
 .dashboard-grid {
   display: flex;

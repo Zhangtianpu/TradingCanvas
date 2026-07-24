@@ -1,83 +1,67 @@
 <template>
   <div class="cycle-panel">
-    <!-- 交易风格时间轴 -->
+    <!-- 交易风格 -->
     <div class="cycle-section">
       <div class="section-header">
         <div class="section-title">交易风格</div>
-        <div class="header-actions">
-          <button class="btn-add" @click="openAddTradeStyle">+ 添加</button>
-        </div>
+        <button class="btn-add" @click="openAddTradeStyle">+ 添加</button>
+      </div>
+      <div class="current-style" v-if="cycleStore.currentTradeStyle">
+        <span class="style-label">当前：</span>
+        <span class="style-tag" :class="`style-${cycleStore.currentTradeStyle.style}`">
+          {{ getTradeStyleLabel(cycleStore.currentTradeStyle.style) }}
+        </span>
+        <span class="style-since">{{ cycleStore.currentTradeStyle.date.slice(5) }}起</span>
+        <span class="style-duration">{{ getTradeStyleDuration() }}</span>
+      </div>
+      <div class="current-style" v-else>
+        <span class="style-label">未设置</span>
       </div>
 
-      <!-- 时间轴 -->
-      <div class="timeline-view" v-if="tradeStyleSegments.length > 0">
-        <!-- 时间标尺 -->
-        <div class="timeline-ruler">
-          <span v-for="mark in tradeStyleTimeMarks" :key="mark" class="ruler-mark">{{ mark }}</span>
-        </div>
-        <!-- 时间轴主体 -->
-        <div class="timeline-body">
-          <div
-            v-for="seg in tradeStyleSegments"
-            :key="seg.id"
-            class="timeline-block"
-            :class="`style-${seg.style}`"
-            :style="{ width: seg.width + '%', left: seg.left + '%' }"
-            @click="openEditTradeStyle(seg)"
-            :title="`${getTradeStyleLabel(seg.style!)} | ${seg.date.slice(5)} ~ ${seg.endDate.slice(5)} | ${seg.days}天`"
-          >
-            <span class="block-label">{{ getTradeStyleLabel(seg.style!) }}</span>
-            <span class="block-days">{{ seg.days }}天</span>
+      <!-- 交易风格历史 -->
+      <div class="history-track" v-if="cycleStore.sortedTradeStyleHistory.length > 0">
+        <template v-for="(h, idx) in cycleStore.sortedTradeStyleHistory" :key="h.id">
+          <div class="history-item editable" :class="`style-${h.style}`" @click="openEditTradeStyle(h)">
+            <span class="hi-dot"></span>
+            <span class="hi-label">{{ getTradeStyleLabel(h.style) }}</span>
+            <span class="hi-date">{{ h.date.slice(5) }}</span>
+            <span class="hi-duration">{{ getTradeStyleItemDuration(idx) }}</span>
           </div>
-        </div>
-        <!-- 日期标签 -->
-        <div class="timeline-labels">
-          <span v-for="seg in tradeStyleSegments" :key="seg.id" class="label-item" :style="{ width: seg.width + '%' }">
-            {{ seg.date.slice(5) }}
-          </span>
-        </div>
+          <span v-if="idx < cycleStore.sortedTradeStyleHistory.length - 1" class="hi-arrow">→</span>
+        </template>
       </div>
-      <div v-else class="empty-hint">暂无记录，点击"+ 添加"开始记录</div>
     </div>
 
-    <!-- 情绪周期时间轴 -->
+    <!-- 情绪周期 -->
     <div class="cycle-section">
       <div class="section-header">
         <div class="section-title">情绪周期</div>
-        <div class="header-actions">
-          <button class="btn-add" @click="openAddCyclePhase">+ 添加</button>
-        </div>
+        <button class="btn-add" @click="openAddCyclePhase">+ 添加</button>
+      </div>
+      <div class="current-style" v-if="cycleStore.currentCyclePhase">
+        <span class="style-label">当前：</span>
+        <span class="style-tag" :class="`phase-${cycleStore.currentCyclePhase.phase}`">
+          {{ getCyclePhaseLabel(cycleStore.currentCyclePhase.phase) }}
+        </span>
+        <span class="style-since">{{ cycleStore.currentCyclePhase.date.slice(5) }}起</span>
+        <span class="style-duration">{{ getCyclePhaseDuration() }}</span>
+      </div>
+      <div class="current-style" v-else>
+        <span class="style-label">未设置</span>
       </div>
 
-      <!-- 时间轴 -->
-      <div class="timeline-view" v-if="cyclePhaseSegments.length > 0">
-        <!-- 时间标尺 -->
-        <div class="timeline-ruler">
-          <span v-for="mark in cyclePhaseTimeMarks" :key="mark" class="ruler-mark">{{ mark }}</span>
-        </div>
-        <!-- 时间轴主体 -->
-        <div class="timeline-body">
-          <div
-            v-for="seg in cyclePhaseSegments"
-            :key="seg.id"
-            class="timeline-block"
-            :class="`phase-${seg.phase}`"
-            :style="{ width: seg.width + '%', left: seg.left + '%' }"
-            @click="openEditCyclePhase(seg)"
-            :title="`${getCyclePhaseLabel(seg.phase!)} | ${seg.date.slice(5)} ~ ${seg.endDate.slice(5)} | ${seg.days}天`"
-          >
-            <span class="block-label">{{ getCyclePhaseLabel(seg.phase!) }}</span>
-            <span class="block-days">{{ seg.days }}天</span>
+      <!-- 情绪周期历史 -->
+      <div class="history-track" v-if="cycleStore.sortedCyclePhaseHistory.length > 0">
+        <template v-for="(h, idx) in cycleStore.sortedCyclePhaseHistory" :key="h.id">
+          <div class="history-item editable" :class="`phase-${h.phase}`" @click="openEditCyclePhase(h)">
+            <span class="hi-dot"></span>
+            <span class="hi-label">{{ getCyclePhaseLabel(h.phase) }}</span>
+            <span class="hi-date">{{ h.date.slice(5) }}</span>
+            <span class="hi-duration">{{ getCyclePhaseItemDuration(idx) }}</span>
           </div>
-        </div>
-        <!-- 日期标签 -->
-        <div class="timeline-labels">
-          <span v-for="seg in cyclePhaseSegments" :key="seg.id" class="label-item" :style="{ width: seg.width + '%' }">
-            {{ seg.date.slice(5) }}
-          </span>
-        </div>
+          <span v-if="idx < cycleStore.sortedCyclePhaseHistory.length - 1" class="hi-arrow">→</span>
+        </template>
       </div>
-      <div v-else class="empty-hint">暂无记录，点击"+ 添加"开始记录</div>
     </div>
 
     <!-- 编辑弹窗 -->
@@ -108,7 +92,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { useCycleStore } from '@/stores/cycle'
 import type { TradeStyle, CyclePhase, TradeStyleHistory, CyclePhaseHistory } from '@/types'
 import { TRADE_STYLE_LABELS, CYCLE_PHASE_LABELS } from '@/types'
@@ -150,91 +134,45 @@ function countTradingDays(startDate: string, endDate: string): number {
   return Math.max(count, 1)
 }
 
-// 交易风格时间段
-interface Segment {
-  id: string
-  style?: TradeStyle
-  phase?: CyclePhase
-  date: string
-  endDate: string
-  days: number
-  width: number  // 百分比宽度
-  left: number   // 百分比左偏移
+function getTradeStyleDuration() {
+  if (!cycleStore.currentTradeStyle) return ''
+  const start = cycleStore.currentTradeStyle.date
+  const end = new Date().toISOString().slice(0, 10)
+  return `${countTradingDays(start, end)}天`
 }
 
-const tradeStyleSegments = computed<Segment[]>(() => {
+function getCyclePhaseDuration() {
+  if (!cycleStore.currentCyclePhase) return ''
+  const start = cycleStore.currentCyclePhase.date
+  const end = new Date().toISOString().slice(0, 10)
+  return `${countTradingDays(start, end)}天`
+}
+
+function getTradeStyleItemDuration(index: number) {
   const history = cycleStore.sortedTradeStyleHistory
-  if (history.length === 0) return []
-
-  const today = new Date().toISOString().slice(0, 10)
-  const segments: Array<{ id: string; style: TradeStyle; date: string; endDate: string; days: number }> = []
-
-  // 计算每个段的起止时间
-  for (let i = 0; i < history.length; i++) {
-    const start = history[i].date
-    const end = i < history.length - 1 ? history[i + 1].date : today
-    const days = countTradingDays(start, end)
-    segments.push({
-      id: history[i].id,
-      style: history[i].style,
-      date: start,
-      endDate: end,
-      days
-    })
+  if (index >= history.length) return ''
+  const start = history[index].date
+  let end: string
+  if (index < history.length - 1) {
+    end = history[index + 1].date
+  } else {
+    end = new Date().toISOString().slice(0, 10)
   }
+  return `${countTradingDays(start, end)}天`
+}
 
-  // 计算总天数
-  const totalDays = segments.reduce((sum, s) => sum + s.days, 0)
-
-  // 计算宽度和位置
-  let accumulated = 0
-  return segments.map(s => {
-    const width = (s.days / totalDays) * 100
-    const left = accumulated
-    accumulated += width
-    return { ...s, width, left }
-  })
-})
-
-const cyclePhaseSegments = computed<Segment[]>(() => {
+function getCyclePhaseItemDuration(index: number) {
   const history = cycleStore.sortedCyclePhaseHistory
-  if (history.length === 0) return []
-
-  const today = new Date().toISOString().slice(0, 10)
-  const segments: Array<{ id: string; phase: CyclePhase; date: string; endDate: string; days: number }> = []
-
-  for (let i = 0; i < history.length; i++) {
-    const start = history[i].date
-    const end = i < history.length - 1 ? history[i + 1].date : today
-    const days = countTradingDays(start, end)
-    segments.push({
-      id: history[i].id,
-      phase: history[i].phase,
-      date: start,
-      endDate: end,
-      days
-    })
+  if (index >= history.length) return ''
+  const start = history[index].date
+  let end: string
+  if (index < history.length - 1) {
+    end = history[index + 1].date
+  } else {
+    end = new Date().toISOString().slice(0, 10)
   }
-
-  const totalDays = segments.reduce((sum, s) => sum + s.days, 0)
-
-  let accumulated = 0
-  return segments.map(s => {
-    const width = (s.days / totalDays) * 100
-    const left = accumulated
-    accumulated += width
-    return { ...s, width, left }
-  })
-})
-
-// 时间标尺标记
-const tradeStyleTimeMarks = computed(() => {
-  return tradeStyleSegments.value.map(s => s.date.slice(5))
-})
-
-const cyclePhaseTimeMarks = computed(() => {
-  return cyclePhaseSegments.value.map(s => s.date.slice(5))
-})
+  return `${countTradingDays(start, end)}天`
+}
 
 // 编辑弹窗
 const editing = ref<{
@@ -265,24 +203,22 @@ function openAddCyclePhase() {
   }
 }
 
-function openEditTradeStyle(seg: Segment) {
-  if (!seg.style) return
+function openEditTradeStyle(h: TradeStyleHistory) {
   editing.value = {
     type: 'tradeStyle',
-    id: seg.id,
-    value: seg.style,
-    date: seg.date,
+    id: h.id,
+    value: h.style,
+    date: h.date,
     isNew: false
   }
 }
 
-function openEditCyclePhase(seg: Segment) {
-  if (!seg.phase) return
+function openEditCyclePhase(h: CyclePhaseHistory) {
   editing.value = {
     type: 'cyclePhase',
-    id: seg.id,
-    value: seg.phase,
-    date: seg.date,
+    id: h.id,
+    value: h.phase,
+    date: h.date,
     isNew: false
   }
 }
@@ -326,13 +262,13 @@ function deleteRecord() {
   padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
 .cycle-section {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .section-header {
@@ -361,11 +297,6 @@ function deleteRecord() {
   border-radius: 2px;
 }
 
-.header-actions {
-  display: flex;
-  gap: 8px;
-}
-
 .btn-add {
   padding: 3px 10px;
   font-size: 11px;
@@ -383,105 +314,125 @@ function deleteRecord() {
   color: var(--color-blue);
 }
 
-/* 时间轴视图 */
-.timeline-view {
+.current-style {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.timeline-ruler {
-  display: flex;
-  height: 18px;
-  font-size: 9px;
-  color: var(--text-tertiary);
-}
-
-.ruler-mark {
-  text-align: left;
-  border-left: 1px solid var(--border-color);
-  padding-left: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-}
-
-/* 时间轴主体 */
-.timeline-body {
-  display: flex;
-  position: relative;
-  height: 36px;
-  background: var(--bg-primary);
-  border-radius: 6px;
-  overflow: hidden;
-  border: 1px solid var(--border-color);
-}
-
-.timeline-block {
-  position: absolute;
-  top: 0;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: filter 0.15s, transform 0.15s;
-  border-right: 1px solid rgba(0,0,0,0.2);
-  overflow: hidden;
-}
-
-.timeline-block:hover {
-  filter: brightness(1.2);
-  transform: scaleY(1.05);
-}
-
-.block-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: #fff;
-  white-space: nowrap;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
-}
-
-.block-days {
-  font-size: 9px;
-  color: rgba(255,255,255,0.85);
-  margin-top: 2px;
-}
-
-/* 日期标签 */
-.timeline-labels {
-  display: flex;
-  font-size: 9px;
-  color: var(--text-tertiary);
-}
-
-.label-item {
-  text-align: left;
-  padding-left: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-}
-
-/* 颜色 - 交易风格 */
-.style-trend { background: linear-gradient(135deg, #58a6ff, #79c0ff); }
-.style-board { background: linear-gradient(135deg, #f0c040, #ffd700); }
-
-/* 颜色 - 情绪周期 */
-.phase-start { background: linear-gradient(135deg, #3fb950, #56d364); }
-.phase-main { background: linear-gradient(135deg, #f85149, #ff7b72); }
-.phase-diverge { background: linear-gradient(135deg, #a371f7, #c297ff); }
-.phase-retreat { background: linear-gradient(135deg, #8b949e, #aab2bc); }
-
-/* 空状态 */
-.empty-hint {
-  color: var(--text-tertiary);
-  font-size: 12px;
-  text-align: center;
-  padding: 12px;
+  gap: 8px;
+  padding: 8px 12px;
   background: var(--bg-tertiary);
   border-radius: 6px;
+  font-size: 13px;
 }
+
+.style-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.style-tag {
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.style-trend { background: #58a6ff; }
+.style-board { background: #f0c040; color: #1f2328; }
+
+.phase-start { background: #3fb950; }
+.phase-main { background: #f85149; }
+.phase-diverge { background: #a371f7; }
+.phase-retreat { background: #8b949e; }
+
+.style-since {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.style-duration {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--color-blue);
+  font-weight: 600;
+  padding: 1px 6px;
+  background: rgba(88,166,255,0.15);
+  border-radius: 3px;
+}
+
+/* 历史记录条 */
+.history-track {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 6px 0;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.history-item.editable {
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.15s;
+}
+
+.history-item.editable:hover {
+  filter: brightness(1.3);
+  transform: scale(1.05);
+}
+
+.hi-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.hi-label {
+  color: var(--text-primary);
+}
+
+.hi-date {
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.hi-duration {
+  font-size: 9px;
+  color: var(--text-secondary);
+  margin-left: 4px;
+  padding: 1px 4px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+}
+
+.hi-arrow {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+/* 历史项颜色 */
+.history-item.style-trend { background: rgba(88,166,255,0.12); }
+.history-item.style-trend .hi-dot { background: #58a6ff; }
+.history-item.style-board { background: rgba(240,192,64,0.12); }
+.history-item.style-board .hi-dot { background: #f0c040; }
+
+.history-item.phase-start { background: rgba(63,185,80,0.12); }
+.history-item.phase-start .hi-dot { background: #3fb950; }
+.history-item.phase-main { background: rgba(248,81,73,0.12); }
+.history-item.phase-main .hi-dot { background: #f85149; }
+.history-item.phase-diverge { background: rgba(163,113,247,0.12); }
+.history-item.phase-diverge .hi-dot { background: #a371f7; }
+.history-item.phase-retreat { background: rgba(139,148,158,0.12); }
+.history-item.phase-retreat .hi-dot { background: #8b949e; }
 
 /* 弹窗 */
 .edit-modal {
@@ -591,10 +542,5 @@ function deleteRecord() {
 
 .btn-save:hover {
   filter: brightness(1.1);
-}
-
-@media (max-width: 768px) {
-  .block-label { font-size: 10px; }
-  .block-days { font-size: 8px; }
 }
 </style>
