@@ -56,6 +56,20 @@
                     <span v-if="e.isClear" class="clear-badge">清</span>
                   </th>
                 </tr>
+                <!-- 高度输入行 -->
+                <tr class="height-input-row">
+                  <th v-for="e in displayEmotions" :key="e.id" class="height-input-cell">
+                    <input
+                      type="number"
+                      :value="e.maxBoardHeight"
+                      @change="(ev) => updateHeight(e, (ev.target as HTMLInputElement).value)"
+                      min="1"
+                      max="20"
+                      class="height-input"
+                      title="修改最高板高度"
+                    />
+                  </th>
+                </tr>
               </thead>
               <tbody>
                 <tr v-for="h in heightRange" :key="h">
@@ -498,6 +512,17 @@ function handleDateClick(e: EmotionDaily) {
   })
 }
 
+// 更新最高板高度
+function updateHeight(e: EmotionDaily, value: string) {
+  const height = parseInt(value, 10)
+  if (isNaN(height) || height < 1 || height > 20) return
+  
+  emotionStore.addOrUpdateEmotion({
+    ...e,
+    maxBoardHeight: height
+  })
+}
+
 // 保存编辑
 function saveEdit() {
   if (!editingCell.value) return
@@ -529,14 +554,15 @@ function saveEdit() {
     : emotion.maxBoardHeight
 
   // 更新情绪数据
+  // 标签是针对整天的数据，任何高度都可以修改
   emotionStore.addOrUpdateEmotion({
     ...emotion,
     maxBoardHeight,
     spaceBoardStocks: stocks,
-    isBreakthrough: height === maxBoardHeight ? editForm.value.isBreakthrough : emotion.isBreakthrough,
-    isMedian: height === maxBoardHeight ? editForm.value.isMedian : emotion.isMedian,
-    isIcePoint: height === maxBoardHeight ? editForm.value.isIcePoint : emotion.isIcePoint,
-    isAnnouncement: height === maxBoardHeight ? editForm.value.isAnnouncement : emotion.isAnnouncement,
+    isBreakthrough: editForm.value.isBreakthrough,
+    isMedian: editForm.value.isMedian,
+    isIcePoint: editForm.value.isIcePoint,
+    isAnnouncement: editForm.value.isAnnouncement,
     remark: editForm.value.remark.trim()
   })
 
@@ -812,6 +838,40 @@ function deleteEdit() {
   margin-left: 2px;
   font-weight: 500;
   vertical-align: middle;
+}
+
+/* 高度输入行 */
+.height-input-row {
+  background: var(--bg-tertiary);
+}
+
+.height-input-cell {
+  height: 32px;
+  padding: 4px 2px;
+  box-sizing: border-box;
+  border-top: none;
+}
+
+.height-input {
+  width: 100%;
+  height: 24px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-primary);
+  font-weight: 500;
+  box-sizing: border-box;
+}
+
+.height-input:focus {
+  outline: none;
+  border-color: var(--color-blue);
+}
+
+.height-input:hover {
+  border-color: var(--color-blue);
 }
 
 .cell {
