@@ -39,19 +39,19 @@
       </div>
       <!-- 表格主体 -->
       <div class="table-container">
-        <!-- 高度输入行（独立于表格） -->
+        <!-- 高度输入行（独立于表格，不影响股票） -->
         <div class="height-input-bar" :style="{ width: displayEmotions.length * cellWidth + 'px' }">
           <input
             v-for="e in displayEmotions"
             :key="e.id"
             type="number"
-            :value="e.maxBoardHeight"
-            @change="(ev) => updateHeight(e, (ev.target as HTMLInputElement).value)"
+            :value="e.heightCalc ?? e.maxBoardHeight"
+            @change="(ev) => updateHeightCalc(e, (ev.target as HTMLInputElement).value)"
             min="1"
             max="20"
             class="height-input"
             :style="{ width: cellWidth + 'px' }"
-            title="修改最高板高度"
+            title="高度计算结果（不影响表格）"
           />
         </div>
         <!-- 表格 -->
@@ -91,7 +91,7 @@
                         >
                           {{ getStockAtHeight(e, h)?.name }}
                         </span>
-                        <div class="badge-row" v-if="h === e.maxBoardHeight">
+                        <div class="badge-row">
                           <span v-if="getStockAtHeight(e, h)?.isAnnouncement" class="announcement-badge">公</span>
                           <span v-if="getStockAtHeight(e, h)?.isIcePoint" class="ice-badge">冰</span>
                           <span v-if="getStockAtHeight(e, h)?.isMedian" class="median-badge">中</span>
@@ -518,14 +518,14 @@ function handleDateClick(e: EmotionDaily) {
   })
 }
 
-// 更新最高板高度
-function updateHeight(e: EmotionDaily, value: string) {
+// 更新高度计算结果（独立字段，不影响表格股票）
+function updateHeightCalc(e: EmotionDaily, value: string) {
   const height = parseInt(value, 10)
   if (isNaN(height) || height < 1 || height > 20) return
   
   emotionStore.addOrUpdateEmotion({
     ...e,
-    maxBoardHeight: height
+    heightCalc: height
   })
 }
 
