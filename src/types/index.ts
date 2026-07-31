@@ -95,6 +95,10 @@ export interface SpaceBoardStock {
   name: string
   height: number
   stockId?: string  // 关联个股ID
+  isBreakthrough?: boolean  // 高度突破
+  isMedian?: boolean        // 中位
+  isIcePoint?: boolean      // 冰点
+  isAnnouncement?: boolean  // 公告
 }
 
 // 每日情绪

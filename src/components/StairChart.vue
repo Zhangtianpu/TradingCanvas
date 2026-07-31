@@ -39,6 +39,22 @@
       </div>
       <!-- 表格主体 -->
       <div class="table-container">
+        <!-- 高度输入行（独立于表格） -->
+        <div class="height-input-bar" :style="{ width: displayEmotions.length * cellWidth + 'px' }">
+          <input
+            v-for="e in displayEmotions"
+            :key="e.id"
+            type="number"
+            :value="e.maxBoardHeight"
+            @change="(ev) => updateHeight(e, (ev.target as HTMLInputElement).value)"
+            min="1"
+            max="20"
+            class="height-input"
+            :style="{ width: cellWidth + 'px' }"
+            title="修改最高板高度"
+          />
+        </div>
+        <!-- 表格 -->
         <div class="table-wrapper">
           <div class="table-scroll" ref="scrollContainerRef" @scroll="onScroll">
             <table class="stair-table" :style="{ '--cell-width': cellWidth + 'px', width: displayEmotions.length * cellWidth + 'px' }">
@@ -54,20 +70,6 @@
                   >
                     {{ e.date.slice(5) }}
                     <span v-if="e.isClear" class="clear-badge">清</span>
-                  </th>
-                </tr>
-                <!-- 高度输入行 -->
-                <tr class="height-input-row">
-                  <th v-for="e in displayEmotions" :key="e.id" class="height-input-cell">
-                    <input
-                      type="number"
-                      :value="e.maxBoardHeight"
-                      @change="(ev) => updateHeight(e, (ev.target as HTMLInputElement).value)"
-                      min="1"
-                      max="20"
-                      class="height-input"
-                      title="修改最高板高度"
-                    />
                   </th>
                 </tr>
               </thead>
@@ -90,9 +92,10 @@
                           {{ getStockAtHeight(e, h)?.name }}
                         </span>
                         <div class="badge-row" v-if="h === e.maxBoardHeight">
-                          <span v-if="e.isAnnouncement" class="announcement-badge">公</span>
-                          <span v-if="e.isIcePoint" class="ice-badge">冰</span>
-                          <span v-if="e.isMedian" class="median-badge">中</span>
+                          <span v-if="getStockAtHeight(e, h)?.isAnnouncement" class="announcement-badge">公</span>
+                          <span v-if="getStockAtHeight(e, h)?.isIcePoint" class="ice-badge">冰</span>
+                          <span v-if="getStockAtHeight(e, h)?.isMedian" class="median-badge">中</span>
+                          <span v-if="getStockAtHeight(e, h)?.isBreakthrough" class="breakthrough-badge">突</span>
                         </div>
                       </div>
                       <span class="edit-hint" @click.stop="handleCellClick(e, h)">✎</span>
@@ -107,8 +110,10 @@
                           {{ getFirstStock(e)?.name || '-' }}
                         </span>
                         <div class="badge-row">
-                          <span v-if="e.isIcePoint" class="ice-badge">冰</span>
-                          <span v-if="e.isMedian" class="median-badge">中</span>
+                          <span v-if="getFirstStock(e)?.isAnnouncement" class="announcement-badge">公</span>
+                          <span v-if="getFirstStock(e)?.isIcePoint" class="ice-badge">冰</span>
+                          <span v-if="getFirstStock(e)?.isMedian" class="median-badge">中</span>
+                          <span v-if="getFirstStock(e)?.isBreakthrough" class="breakthrough-badge">突</span>
                         </div>
                       </div>
                       <span class="edit-hint" @click.stop="handleCellClick(e, h)">✎</span>
@@ -486,10 +491,11 @@ function handleCellClick(e: EmotionDaily, h: number) {
   editForm.value = {
     stockName: existingStock?.name || '',
     selectedStockId: existingStock?.stockId || '',
-    isBreakthrough: h === e.maxBoardHeight ? e.isBreakthrough : false,
-    isMedian: h === e.maxBoardHeight ? e.isMedian : false,
-    isIcePoint: h === e.maxBoardHeight ? e.isIcePoint : false,
-    isAnnouncement: h === e.maxBoardHeight ? e.isAnnouncement : false,
+    // 从股票对象读取标签（如果存在）
+    isBreakthrough: existingStock?.isBreakthrough || false,
+    isMedian: existingStock?.isMedian || false,
+    isIcePoint: existingStock?.isIcePoint || false,
+    isAnnouncement: existingStock?.isAnnouncement || false,
     remark: e.remark || ''
   }
 
@@ -539,12 +545,16 @@ function saveEdit() {
     stocks.splice(existingIdx, 1)
   }
 
-  // 添加新股票
+  // 添加新股票（带标签）
   if (stockName) {
     stocks.push({
       name: stockName,
       height,
-      stockId: editForm.value.selectedStockId || undefined
+      stockId: editForm.value.selectedStockId || undefined,
+      isBreakthrough: editForm.value.isBreakthrough,
+      isMedian: editForm.value.isMedian,
+      isIcePoint: editForm.value.isIcePoint,
+      isAnnouncement: editForm.value.isAnnouncement
     })
   }
 
@@ -554,15 +564,10 @@ function saveEdit() {
     : emotion.maxBoardHeight
 
   // 更新情绪数据
-  // 标签是针对整天的数据，任何高度都可以修改
   emotionStore.addOrUpdateEmotion({
     ...emotion,
     maxBoardHeight,
     spaceBoardStocks: stocks,
-    isBreakthrough: editForm.value.isBreakthrough,
-    isMedian: editForm.value.isMedian,
-    isIcePoint: editForm.value.isIcePoint,
-    isAnnouncement: editForm.value.isAnnouncement,
     remark: editForm.value.remark.trim()
   })
 
@@ -840,29 +845,24 @@ function deleteEdit() {
   vertical-align: middle;
 }
 
-/* 高度输入行 */
-.height-input-row {
-  background: var(--bg-tertiary);
-}
-
-.height-input-cell {
-  height: 32px;
-  padding: 4px 2px;
-  box-sizing: border-box;
-  border-top: none;
+/* 高度输入行（独立于表格） */
+.height-input-bar {
+  display: flex;
+  margin-bottom: 4px;
+  flex-shrink: 0;
 }
 
 .height-input {
-  width: 100%;
-  height: 24px;
-  background: var(--bg-primary);
+  height: 28px;
+  background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   border-radius: 3px;
   text-align: center;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-primary);
   font-weight: 500;
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .height-input:focus {
@@ -944,6 +944,16 @@ function deleteEdit() {
   display: inline-block;
   font-size: 9px;
   background: #a855f7;
+  color: #fff;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.breakthrough-badge {
+  display: inline-block;
+  font-size: 9px;
+  background: #f85149;
   color: #fff;
   padding: 1px 4px;
   border-radius: 3px;
