@@ -36,6 +36,10 @@
       <!-- 高度标签 -->
       <div class="height-labels">
         <div v-for="h in heightRange" :key="h" class="height-label">{{ h }}板</div>
+        <div class="height-adjust">
+          <button class="height-btn" @click="addHeightLevel" title="增加板高">+</button>
+          <button class="height-btn" @click="removeHeightLevel" title="减少板高">−</button>
+        </div>
       </div>
       <!-- 表格主体 -->
       <div class="table-container">
@@ -382,8 +386,10 @@ const editForm = ref({
 })
 const editInputRef = ref<HTMLInputElement | null>(null)
 
-// 计算高度范围（从最高到1）
-// 计算高度范围：基于实际股票高度和 maxBoardHeight 的最大值
+// 手动增加的额外高度层级
+const extraHeight = ref(0)
+
+// 计算高度范围：基于实际股票高度、maxBoardHeight 和手动调整的最大值
 const heightRange = computed(() => {
   const data = displayEmotions.value
   if (data.length === 0) return []
@@ -397,12 +403,26 @@ const heightRange = computed(() => {
       }
     }
   }
+  // 加上手动增加的层级
+  maxH += extraHeight.value
   const range = []
   for (let i = maxH; i >= 1; i--) {
     range.push(i)
   }
   return range
 })
+
+// 增加高度层级
+function addHeightLevel() {
+  extraHeight.value++
+}
+
+// 减少高度层级
+function removeHeightLevel() {
+  if (extraHeight.value > 0) {
+    extraHeight.value--
+  }
+}
 
 // 动态计算单元格宽度
 const cellWidth = computed(() => {
@@ -444,18 +464,24 @@ function getFirstStock(e: EmotionDaily): SpaceBoardStock | null {
 // 获取单元格样式类
 function getCellClass(e: EmotionDaily, h: number, idx: number): Record<string, boolean> {
   const classes: Record<string, boolean> = {}
+  const stock = getStockAtHeight(e, h) || (h === e.maxBoardHeight ? getFirstStock(e) : null)
 
-  if (h === e.maxBoardHeight) {
-    classes['max-height'] = true
-    if (e.isBreakthrough) {
+  if (stock) {
+    classes['has-stock'] = true
+    if (h === e.maxBoardHeight) {
+      classes['max-height'] = true
+    }
+    // 从股票对象读取标签
+    if (stock.isBreakthrough) {
       classes['breakthrough'] = true
-    } else if (e.isMedian) {
+    } else if (stock.isMedian) {
       classes['median'] = true
-    } else if (e.isIcePoint) {
+    } else if (stock.isIcePoint) {
       classes['ice-point'] = true
     }
-  } else if (hasStockAtHeight(e, h)) {
-    classes['has-stock'] = true
+    if (stock.isAnnouncement) {
+      classes['announcement'] = true
+    }
   } else if (h <= e.maxBoardHeight) {
     classes['filled'] = true
   }
@@ -721,7 +747,7 @@ function deleteEdit() {
 .height-labels {
   display: flex;
   flex-direction: column;
-  padding-top: 38px;  /* 对齐表头高度 */
+  padding-top: 70px;  /* 对齐高度输入行(32px) + 表头(38px) */
 }
 
 .height-label {
@@ -732,6 +758,35 @@ function deleteEdit() {
   font-size: 12px;
   color: var(--text-secondary);
   width: 36px;
+}
+
+.height-adjust {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+  justify-content: center;
+  width: 36px;
+}
+
+.height-btn {
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.height-btn:hover {
+  border-color: var(--color-blue);
+  color: var(--color-blue);
 }
 
 /* 表格容器：垂直排列（表格+滚动条） */
@@ -931,6 +986,10 @@ function deleteEdit() {
   border-color: rgba(88, 166, 255, 0.4);
 }
 
+.cell.announcement {
+  border-color: rgba(168, 85, 247, 0.5);
+}
+
 .median-badge {
   display: inline-block;
   font-size: 9px;
@@ -1005,6 +1064,11 @@ function deleteEdit() {
 
 .cell.ice-point .stock-name {
   background: rgba(88, 166, 255, 0.9);
+  color: #fff;
+}
+
+.cell.announcement .stock-name {
+  background: rgba(168, 85, 247, 0.9);
   color: #fff;
 }
 
