@@ -54,6 +54,8 @@
                 type="text"
                 :value="e.heightCalc ?? ''"
                 @change="(ev) => updateHeightCalc(e, (ev.target as HTMLInputElement).value)"
+                @mousedown.stop
+                draggable="false"
                 class="height-input"
                 :style="{ width: cellWidth + 'px' }"
                 :placeholder="String(e.maxBoardHeight)"
@@ -924,6 +926,8 @@ function deleteEdit() {
   font-weight: 500;
   box-sizing: border-box;
   flex-shrink: 0;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .height-input::placeholder {
