@@ -39,24 +39,23 @@
       </div>
       <!-- 表格主体 -->
       <div class="table-container">
-        <!-- 高度输入行（独立于表格，不影响股票） -->
-        <div class="height-input-bar" :style="{ width: displayEmotions.length * cellWidth + 'px' }">
-          <input
-            v-for="e in displayEmotions"
-            :key="e.id"
-            type="number"
-            :value="e.heightCalc ?? e.maxBoardHeight"
-            @change="(ev) => updateHeightCalc(e, (ev.target as HTMLInputElement).value)"
-            min="1"
-            max="20"
-            class="height-input"
-            :style="{ width: cellWidth + 'px' }"
-            title="高度计算结果（不影响表格）"
-          />
-        </div>
-        <!-- 表格 -->
+        <!-- 表格（含高度输入行，同步滚动） -->
         <div class="table-wrapper">
           <div class="table-scroll" ref="scrollContainerRef" @scroll="onScroll">
+            <!-- 高度计算输入行（与表格同步滚动） -->
+            <div class="height-input-bar" :style="{ width: displayEmotions.length * cellWidth + 'px' }">
+              <input
+                v-for="e in displayEmotions"
+                :key="e.id"
+                type="text"
+                :value="e.heightCalc ?? ''"
+                @change="(ev) => updateHeightCalc(e, (ev.target as HTMLInputElement).value)"
+                class="height-input"
+                :style="{ width: cellWidth + 'px' }"
+                :placeholder="String(e.maxBoardHeight)"
+                title="高度计算结果（如4进5，不影响表格）"
+              />
+            </div>
             <table class="stair-table" :style="{ '--cell-width': cellWidth + 'px', width: displayEmotions.length * cellWidth + 'px' }">
               <thead>
                 <tr>
@@ -384,10 +383,20 @@ const editForm = ref({
 const editInputRef = ref<HTMLInputElement | null>(null)
 
 // 计算高度范围（从最高到1）
+// 计算高度范围：基于实际股票高度和 maxBoardHeight 的最大值
 const heightRange = computed(() => {
   const data = displayEmotions.value
   if (data.length === 0) return []
-  const maxH = Math.max(...data.map(e => e.maxBoardHeight || 0), 7)
+  // 取所有股票的最大高度和 maxBoardHeight 中的最大值，最低7板
+  let maxH = 7
+  for (const e of data) {
+    if (e.maxBoardHeight > maxH) maxH = e.maxBoardHeight
+    if (e.spaceBoardStocks) {
+      for (const s of e.spaceBoardStocks) {
+        if (s.height > maxH) maxH = s.height
+      }
+    }
+  }
   const range = []
   for (let i = maxH; i >= 1; i--) {
     range.push(i)
@@ -520,12 +529,9 @@ function handleDateClick(e: EmotionDaily) {
 
 // 更新高度计算结果（独立字段，不影响表格股票）
 function updateHeightCalc(e: EmotionDaily, value: string) {
-  const height = parseInt(value, 10)
-  if (isNaN(height) || height < 1 || height > 20) return
-  
   emotionStore.addOrUpdateEmotion({
     ...e,
-    heightCalc: height
+    heightCalc: value.trim()
   })
 }
 
@@ -845,7 +851,7 @@ function deleteEdit() {
   vertical-align: middle;
 }
 
-/* 高度输入行（独立于表格） */
+/* 高度输入行（与表格同步滚动） */
 .height-input-bar {
   display: flex;
   margin-bottom: 4px;
@@ -863,6 +869,11 @@ function deleteEdit() {
   font-weight: 500;
   box-sizing: border-box;
   flex-shrink: 0;
+}
+
+.height-input::placeholder {
+  color: var(--text-tertiary);
+  font-weight: 400;
 }
 
 .height-input:focus {

@@ -131,7 +131,7 @@ export interface EmotionDaily {
   continuousBoardCount: number // 连板家数(2板以上合计)
   // 空间板
   maxBoardHeight: number     // 空间板高度
-  heightCalc?: number        // 高度计算结果（独立于表格，用户手动输入）
+  heightCalc?: string        // 高度计算结果（如"4进5"，独立于表格，用户手动输入）
   spaceBoardStocks: SpaceBoardStock[] // 空间板个股列表
   prevHighBoard: number      // 前期高点
   isBreakthrough: boolean    // 是否突破
