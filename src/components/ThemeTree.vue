@@ -317,7 +317,7 @@ import type { Theme, ThemeStatus, StockRole, Stock, StatusHistory } from '@/type
 const themeStore = useThemeStore()
 const stockStore = useStockStore()
 
-const activeStatuses: ThemeStatus[] = ['burst', 'ferment', 'climax', 'diverge', 'retreat', 'rebound']
+const activeStatuses: ThemeStatus[] = ['burst', 'ferment', 'climax', 'diverge', 'retreat', 'rebound', 'repair']
 
 // 折叠状态
 const collapsedThemes = ref(new Set<string>())
