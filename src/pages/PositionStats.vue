@@ -66,7 +66,7 @@
         当前持仓 <span class="tab-count" v-if="positions.length">{{ positions.length }}</span>
       </button>
       <button class="tab-btn" :class="{ active: tab === 'closed' }" @click="tab = 'closed'">
-        已平仓 <span class="tab-count" v-if="closedPositions.length">{{ closedPositions.length }}</span>
+        已平仓 <span class="tab-count" v-if="filteredClosedPositions.length">{{ filteredClosedPositions.length }}</span>
       </button>
       <button class="tab-btn" :class="{ active: tab === 'mode-analysis' }" @click="tab = 'mode-analysis'">
         模式分析
@@ -74,6 +74,24 @@
       <button class="tab-btn" :class="{ active: tab === 'trades' }" @click="tab = 'trades'">
         交易记录 <span class="tab-count" v-if="allTrades.length">{{ allTrades.length }}</span>
       </button>
+    </div>
+
+    <!-- 时间筛选（已平仓） -->
+    <div v-if="tab === 'closed'" class="time-filter-bar">
+      <button
+        v-for="opt in timeFilterOptions"
+        :key="opt.value"
+        class="time-filter-btn"
+        :class="{ active: timeFilter === opt.value }"
+        @click="timeFilter = opt.value"
+      >
+        {{ opt.label }}
+      </button>
+      <div v-if="timeFilter === 'custom'" class="custom-date-range">
+        <input type="date" v-model="customStartDate" class="date-input" />
+        <span class="date-sep">至</span>
+        <input type="date" v-model="customEndDate" class="date-input" />
+      </div>
     </div>
 
     <!-- 当前持仓 -->
@@ -128,15 +146,16 @@
 
     <!-- 已平仓 -->
     <div v-if="tab === 'closed'">
-      <div v-if="closedPositions.length === 0" class="empty-state card">
+      <div v-if="filteredClosedPositions.length === 0" class="empty-state card">
         <p>暂无已平仓记录</p>
       </div>
       <div v-else class="position-list">
-        <div v-for="p in closedPositions" :key="p.stock.id" class="card position-card">
+        <div v-for="p in filteredClosedPositions" :key="p.stock.id" class="card position-card">
           <div class="pos-header">
             <span class="pos-name" @click="$router.push(`/stocks/${p.stock.id}`)">{{ p.stock.name }}</span>
             <span class="pos-code">{{ p.stock.code }}</span>
             <span class="pos-theme">{{ getThemeName(p.stock.themeId) }}</span>
+            <span class="pos-mode">{{ getModeName(getPositionMode(p)) }}</span>
           </div>
           <div class="pos-grid">
             <div class="pos-item">
@@ -154,6 +173,10 @@
             <div class="pos-item">
               <span class="pos-label">卖出均价</span>
               <span class="pos-val">{{ p.avgSellPrice.toFixed(2) }}</span>
+            </div>
+            <div class="pos-item">
+              <span class="pos-label">平仓日期</span>
+              <span class="pos-val">{{ getLastTradeDate(p) }}</span>
             </div>
             <div class="pos-item" :class="{ profit: p.realizedPnl > 0, loss: p.realizedPnl < 0 }">
               <span class="pos-label">已实现盈亏</span>
@@ -436,6 +459,19 @@ const tradeModeStore = useTradeModeStore()
 const toast = useToast()
 
 const tab = ref<'positions' | 'closed' | 'mode-analysis' | 'trades'>('positions')
+
+// 时间筛选
+const timeFilter = ref<'all' | 'week' | 'month' | 'quarter' | 'custom'>('all')
+const customStartDate = ref('')
+const customEndDate = ref('')
+
+const timeFilterOptions = [
+  { value: 'all' as const, label: '全部' },
+  { value: 'week' as const, label: '近一周' },
+  { value: 'month' as const, label: '近一个月' },
+  { value: 'quarter' as const, label: '近三个月' },
+  { value: 'custom' as const, label: '自定义' }
+]
 
 // 模式分析
 const selectedModeId = ref<string>('')
@@ -1011,6 +1047,52 @@ const closedPositions = computed(() => {
     })
 })
 
+// 根据时间筛选已平仓列表
+const filteredClosedPositions = computed(() => {
+  if (timeFilter.value === 'all') return closedPositions.value
+
+  const now = new Date()
+  let startDate = ''
+
+  if (timeFilter.value === 'week') {
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+    startDate = weekAgo.toISOString().slice(0, 10)
+  } else if (timeFilter.value === 'month') {
+    const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+    startDate = monthAgo.toISOString().slice(0, 10)
+  } else if (timeFilter.value === 'quarter') {
+    const quarterAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+    startDate = quarterAgo.toISOString().slice(0, 10)
+  } else if (timeFilter.value === 'custom') {
+    startDate = customStartDate.value
+  }
+
+  if (!startDate) return closedPositions.value
+
+  return closedPositions.value.filter(p => {
+    const lastDate = getLastTradeDate(p)
+    if (timeFilter.value === 'custom' && customEndDate.value) {
+      return lastDate >= startDate && lastDate <= customEndDate.value
+    }
+    return lastDate >= startDate
+  })
+})
+
+// 获取持仓的模式（取买入交易的模式）
+function getPositionMode(p: PositionData): string | undefined {
+  const buyTrades = p.stock.trades?.filter(t => t.direction === 'buy') || []
+  if (buyTrades.length === 0) return undefined
+  // 返回最后买入交易的模式
+  const lastBuy = buyTrades.sort((a, b) => b.date.localeCompare(a.date))[0]
+  return lastBuy.modeId
+}
+
+// 获取最后交易日期（格式化为 YYYY-MM-DD）
+function getLastTradeDate(p: PositionData): string {
+  if (!p.stock.trades || p.stock.trades.length === 0) return ''
+  return p.stock.trades.map(t => t.date).sort().reverse()[0] || ''
+}
+
 const totalCost = computed(() => positions.value.reduce((sum, p) => sum + p.totalCost, 0))
 const totalValue = computed(() =>
   positions.value.reduce((sum, p) => sum + (p.stock.currentPrice || 0) * p.netQty, 0)
@@ -1409,6 +1491,66 @@ function updatePrice(stockId: string, event: Event) {
   gap: 4px;
   margin-bottom: 16px;
   border-bottom: 1px solid var(--border-color);
+}
+
+.time-filter-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+}
+
+.time-filter-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.time-filter-btn:hover {
+  border-color: var(--color-blue);
+  color: var(--color-blue);
+}
+
+.time-filter-btn.active {
+  background: var(--color-blue);
+  color: #fff;
+  border-color: var(--color-blue);
+}
+
+.custom-date-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-input {
+  padding: 6px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-radius: 4px;
+}
+
+.date-sep {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.pos-mode {
+  font-size: 11px;
+  padding: 2px 6px;
+  background: rgba(88, 166, 255, 0.15);
+  color: var(--color-blue);
+  border-radius: 3px;
 }
 
 .tab-btn {
