@@ -817,6 +817,7 @@ function onThemeDrop(targetId: string, e: DragEvent) {
 .node-diverge { background: #a371f7; }
 .node-retreat { background: #8b949e; }
 .node-rebound { background: #3fb950; }
+.node-repair { background: #f0883e; }
 
 /* 状态变更历史条 */
 .status-history-bar {
@@ -915,6 +916,8 @@ function onThemeDrop(targetId: string, e: DragEvent) {
 .shi-retreat .shi-dot { background: #8b949e; }
 .shi-rebound { background: rgba(63,185,80,0.12); }
 .shi-rebound .shi-dot { background: #3fb950; }
+.shi-repair { background: rgba(240,136,62,0.12); }
+.shi-repair .shi-dot { background: #f0883e; }
 
 .status-history-bar.sub-history {
   margin-left: 36px;
