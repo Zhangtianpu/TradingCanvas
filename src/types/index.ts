@@ -2,7 +2,7 @@
 export type ThemeLevel = 'main' | 'sub' | 'rotation'
 
 // 题材状态
-export type ThemeStatus = 'burst' | 'ferment' | 'climax' | 'diverge' | 'retreat' | 'rebound' | 'adjust'
+export type ThemeStatus = 'burst' | 'ferment' | 'climax' | 'diverge' | 'retreat' | 'rebound' | 'adjust' | 'repair'
 
 // 个股角色
 export type StockRole = 'leader' | 'mid' | 'follower' | 'catchup'
@@ -225,7 +225,8 @@ export const THEME_STATUS_LABELS: Record<ThemeStatus, string> = {
   'diverge': '分歧',
   'retreat': '退潮',
   'rebound': '反弹',
-  'adjust': '调整'
+  'adjust': '调整',
+  'repair': '修复'
 }
 
 // 个股角色映射

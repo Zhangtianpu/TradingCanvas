@@ -339,7 +339,8 @@ const statusOptions = [
   { value: 'climax' as ThemeStatus, label: '高潮' },
   { value: 'diverge' as ThemeStatus, label: '分歧' },
   { value: 'retreat' as ThemeStatus, label: '退潮' },
-  { value: 'rebound' as ThemeStatus, label: '反弹' }
+  { value: 'rebound' as ThemeStatus, label: '反弹' },
+  { value: 'repair' as ThemeStatus, label: '修复' }
 ]
 
 function toggleStatusDropdown(themeId: string) {
@@ -563,7 +564,7 @@ function removeStock(stockId: string) {
 function getStatusLabel(status: ThemeStatus) {
   const labels: Record<ThemeStatus, string> = {
     burst: '爆发', ferment: '发酵', climax: '高潮',
-    diverge: '分歧', retreat: '退潮', rebound: '反弹', adjust: '调整'
+    diverge: '分歧', retreat: '退潮', rebound: '反弹', adjust: '调整', repair: '修复'
   }
   return labels[status]
 }
@@ -1109,6 +1110,10 @@ function onThemeDrop(targetId: string, e: DragEvent) {
 .status-rebound { border-left-color: #3fb950; }
 .status-rebound .bar-status { background: #3fb950; }
 .status-rebound .tl-fill { background: linear-gradient(90deg, #3fb950, #56d364); }
+
+.status-repair { border-left-color: #f0883e; }
+.status-repair .bar-status { background: #f0883e; }
+.status-repair .tl-fill { background: linear-gradient(90deg, #f0883e, #ffa657); }
 
 /* 底部图例 */
 .tree-footer {
