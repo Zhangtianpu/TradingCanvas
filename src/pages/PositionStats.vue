@@ -996,7 +996,20 @@ const allPositions = computed(() => {
 })
 
 const positions = computed(() => allPositions.value.filter(p => p.netQty > 0))
-const closedPositions = computed(() => allPositions.value.filter(p => p.netQty === 0 && p.totalBuyQty > 0))
+const closedPositions = computed(() => {
+  return allPositions.value
+    .filter(p => p.netQty === 0 && p.totalBuyQty > 0)
+    .sort((a, b) => {
+      // 按最后交易日期降序（最近的在前）
+      const aLastDate = a.stock.trades?.length > 0
+        ? a.stock.trades.map(t => t.date).sort().reverse()[0]
+        : ''
+      const bLastDate = b.stock.trades?.length > 0
+        ? b.stock.trades.map(t => t.date).sort().reverse()[0]
+        : ''
+      return bLastDate.localeCompare(aLastDate)
+    })
+})
 
 const totalCost = computed(() => positions.value.reduce((sum, p) => sum + p.totalCost, 0))
 const totalValue = computed(() =>
