@@ -15,6 +15,46 @@
       </div>
     </div>
 
+    <!-- 手续费设置 -->
+    <div class="card commission-settings">
+      <div class="commission-row">
+        <label class="commission-label">手续费率:</label>
+        <input
+          type="number"
+          step="0.0001"
+          class="commission-input"
+          :value="commissionRate"
+          @change="updateCommissionRate($event)"
+          placeholder="万三"
+        />
+        <span class="commission-hint">（买入+卖出，默认万三）</span>
+      </div>
+      <div class="commission-row">
+        <label class="commission-label">印花税率:</label>
+        <input
+          type="number"
+          step="0.0001"
+          class="commission-input"
+          :value="stampDutyRate"
+          @change="updateStampDutyRate($event)"
+          placeholder="千一"
+        />
+        <span class="commission-hint">（仅卖出，默认千一）</span>
+      </div>
+      <div class="commission-row">
+        <label class="commission-label">最低手续费:</label>
+        <input
+          type="number"
+          step="1"
+          class="commission-input"
+          :value="minCommission"
+          @change="updateMinCommission($event)"
+          placeholder="5元"
+        />
+        <span class="commission-hint">（不足时按此金额收取，默认5元）</span>
+      </div>
+    </div>
+
     <!-- 概览卡片 -->
     <div class="overview-grid">
       <div class="card stat-card">
@@ -31,8 +71,9 @@
         <div class="stat-sub" v-if="totalCost > 0">{{ formatPct(totalPnlRate) }}</div>
       </div>
       <div class="card stat-card" :class="{ profit: realizedPnl > 0, loss: realizedPnl < 0 }">
-        <div class="stat-label">已实现盈亏</div>
+        <div class="stat-label">已实现盈亏（含手续费）</div>
         <div class="stat-value">{{ formatMoney(realizedPnl) }}</div>
+        <div class="stat-sub">手续费: {{ formatMoney(totalCommission) }}</div>
       </div>
     </div>
 
@@ -76,21 +117,57 @@
       </button>
     </div>
 
-    <!-- 时间筛选（已平仓） -->
-    <div v-if="tab === 'closed'" class="time-filter-bar">
-      <button
-        v-for="opt in timeFilterOptions"
-        :key="opt.value"
-        class="time-filter-btn"
-        :class="{ active: timeFilter === opt.value }"
-        @click="timeFilter = opt.value"
-      >
-        {{ opt.label }}
-      </button>
-      <div v-if="timeFilter === 'custom'" class="custom-date-range">
-        <input type="date" v-model="customStartDate" class="date-input" />
-        <span class="date-sep">至</span>
-        <input type="date" v-model="customEndDate" class="date-input" />
+    <!-- 时间筛选和模式筛选（已平仓） -->
+    <div v-if="tab === 'closed'" class="filter-bar">
+      <div class="time-filter-section">
+        <button
+          v-for="opt in timeFilterOptions"
+          :key="opt.value"
+          class="filter-btn"
+          :class="{ active: timeFilter === opt.value }"
+          @click="timeFilter = opt.value"
+        >
+          {{ opt.label }}
+        </button>
+        <div v-if="timeFilter === 'custom'" class="custom-date-range">
+          <input type="date" v-model="customStartDate" class="date-input" />
+          <span class="date-sep">至</span>
+          <input type="date" v-model="customEndDate" class="date-input" />
+        </div>
+      </div>
+      <div class="mode-filter-section">
+        <label class="filter-label">交易模式:</label>
+        <select v-model="closedModeFilter" class="mode-filter-select">
+          <option value="">全部模式</option>
+          <option v-for="m in tradeModeStore.tradeModes" :key="m.id" :value="m.id">{{ m.name }}</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 已平仓模式分析统计 -->
+    <div v-if="tab === 'closed' && closedModeStats.length > 0" class="card closed-mode-stats">
+      <div class="closed-stats-title">模式统计分析</div>
+      <div class="closed-stats-grid">
+        <div v-for="stat in closedModeStats" :key="stat.modeId" class="closed-stat-item">
+          <div class="closed-stat-header">
+            <span class="closed-stat-name">
+              <span class="mode-dot" :style="{ background: stat.color }"></span>
+              {{ stat.label }}
+            </span>
+            <span class="closed-stat-rate" :class="{ win: stat.winRate >= 50, loss: stat.winRate < 50 }">
+              {{ stat.winRate.toFixed(0) }}%
+            </span>
+          </div>
+          <div class="closed-stat-detail">
+            <span>{{ stat.winCount }}胜 / {{ stat.lossCount }}负</span>
+            <span :class="{ win: stat.totalPnl >= 0, loss: stat.totalPnl < 0 }">
+              {{ stat.totalPnl >= 0 ? '+' : '' }}{{ formatMoney(stat.totalPnl) }}
+            </span>
+          </div>
+          <div class="closed-stat-fee">
+            <span>手续费: {{ formatMoney(stat.totalFee) }}</span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -179,13 +256,27 @@
               <span class="pos-val">{{ getLastTradeDate(p) }}</span>
             </div>
             <div class="pos-item" :class="{ profit: p.realizedPnl > 0, loss: p.realizedPnl < 0 }">
-              <span class="pos-label">已实现盈亏</span>
+              <span class="pos-label">已实现盈亏（含手续费）</span>
               <span class="pos-val">{{ formatMoney(p.realizedPnl) }}</span>
+            </div>
+            <div class="pos-item">
+              <span class="pos-label">手续费</span>
+              <span class="pos-val fee-text">{{ formatMoney(p.totalFee) }}</span>
             </div>
             <div class="pos-item" :class="{ profit: p.realizedPnlRate > 0, loss: p.realizedPnlRate < 0 }">
               <span class="pos-label">盈亏%</span>
               <span class="pos-val">{{ formatPct(p.realizedPnlRate) }}</span>
             </div>
+          </div>
+          <div class="pos-note-row">
+            <span class="pos-label">备注:</span>
+            <input
+              type="text"
+              class="note-input"
+              :value="p.stock.closeNote || ''"
+              @change="updateCloseNote(p.stock.id, $event)"
+              placeholder="点击添加平仓备注..."
+            />
           </div>
         </div>
       </div>
@@ -460,10 +551,42 @@ const toast = useToast()
 
 const tab = ref<'positions' | 'closed' | 'mode-analysis' | 'trades'>('positions')
 
+// 手续费率设置
+const commissionRate = ref<number>(0.0003)  // 默认万三
+const stampDutyRate = ref<number>(0.001)     // 默认千一
+const minCommission = ref<number>(5)         // 默认最低5元
+
+function updateCommissionRate(event: Event) {
+  const target = event.target as HTMLInputElement
+  const value = parseFloat(target.value)
+  if (!isNaN(value) && value >= 0) {
+    commissionRate.value = value
+  }
+}
+
+function updateStampDutyRate(event: Event) {
+  const target = event.target as HTMLInputElement
+  const value = parseFloat(target.value)
+  if (!isNaN(value) && value >= 0) {
+    stampDutyRate.value = value
+  }
+}
+
+function updateMinCommission(event: Event) {
+  const target = event.target as HTMLInputElement
+  const value = parseFloat(target.value)
+  if (!isNaN(value) && value >= 0) {
+    minCommission.value = value
+  }
+}
+
 // 时间筛选
 const timeFilter = ref<'all' | 'week' | 'month' | 'quarter' | 'custom'>('all')
 const customStartDate = ref('')
 const customEndDate = ref('')
+
+// 已平仓模式筛选
+const closedModeFilter = ref<string>('')
 
 const timeFilterOptions = [
   { value: 'all' as const, label: '全部' },
@@ -979,6 +1102,7 @@ interface PositionData {
   pnlRate: number
   realizedPnl: number
   realizedPnlRate: number
+  totalFee: number  // 总手续费
 }
 
 function computePosition(stock: Stock): PositionData | null {
@@ -988,20 +1112,32 @@ function computePosition(stock: Stock): PositionData | null {
   let totalBuyAmount = 0
   let totalSellQty = 0
   let totalSellAmount = 0
+  let totalBuyFee = 0   // 买入手续费
+  let totalSellFee = 0  // 卖出手续费（含印花税）
 
   for (const t of stock.trades) {
+    const amount = t.price * t.quantity
     if (t.direction === 'buy') {
       totalBuyQty += t.quantity
-      totalBuyAmount += t.price * t.quantity
+      totalBuyAmount += amount
+      // 买入手续费 = 买入金额 × 手续费率，不足最低手续费时按最低收取
+      const buyFee = amount * commissionRate.value
+      totalBuyFee += Math.max(buyFee, minCommission.value)
     } else {
       totalSellQty += t.quantity
-      totalSellAmount += t.price * t.quantity
+      totalSellAmount += amount
+      // 卖出手续费 = 卖出金额 × (手续费率 + 印花税率)，手续费部分不足最低时按最低收取
+      const commissionFee = amount * commissionRate.value
+      const stampFee = amount * stampDutyRate.value
+      const actualCommission = Math.max(commissionFee, minCommission.value)
+      totalSellFee += actualCommission + stampFee
     }
   }
 
   const netQty = totalBuyQty - totalSellQty
   const avgBuyPrice = totalBuyQty > 0 ? totalBuyAmount / totalBuyQty : 0
   const avgSellPrice = totalSellQty > 0 ? totalSellAmount / totalSellQty : 0
+  const totalFee = totalBuyFee + totalSellFee
 
   if (netQty > 0) {
     // 持仓中
@@ -1010,16 +1146,18 @@ function computePosition(stock: Stock): PositionData | null {
     const currentPrice = stock.currentPrice || 0
     const pnl = currentPrice > 0 ? (currentPrice - avgCost) * netQty : 0
     const pnlRate = avgCost > 0 && currentPrice > 0 ? (currentPrice - avgCost) / avgCost : 0
-    const realizedPnl = totalSellQty > 0 ? (avgSellPrice - avgBuyPrice) * totalSellQty : 0
-    const realizedPnlRate = avgBuyPrice > 0 && totalSellQty > 0 ? (avgSellPrice - avgBuyPrice) / avgBuyPrice : 0
-    return { stock, netQty, totalBuyQty, totalSellQty, avgBuyPrice, avgSellPrice, avgCost, totalCost, pnl, pnlRate, realizedPnl, realizedPnlRate }
+    // 已实现盈亏 = (卖出均价 - 买入均价) × 卖出数量 - 已发生的手续费
+    const realizedPnl = totalSellQty > 0 ? (avgSellPrice - avgBuyPrice) * totalSellQty - totalSellFee - (totalBuyFee * totalSellQty / totalBuyQty) : 0
+    const realizedPnlRate = avgBuyPrice > 0 && totalSellQty > 0 ? realizedPnl / (avgBuyPrice * totalSellQty) : 0
+    return { stock, netQty, totalBuyQty, totalSellQty, avgBuyPrice, avgSellPrice, avgCost, totalCost, pnl, pnlRate, realizedPnl, realizedPnlRate, totalFee: totalSellFee + (totalBuyFee * totalSellQty / totalBuyQty) }
   } else if (totalBuyQty > 0) {
     // 已平仓
-    const realizedPnl = (avgSellPrice - avgBuyPrice) * totalSellQty
-    const realizedPnlRate = avgBuyPrice > 0 ? (avgSellPrice - avgBuyPrice) / avgBuyPrice : 0
+    // 已实现盈亏 = (卖出均价 - 买入均价) × 卖出数量 - 总手续费
+    const realizedPnl = (avgSellPrice - avgBuyPrice) * totalSellQty - totalFee
+    const realizedPnlRate = avgBuyPrice > 0 ? realizedPnl / (avgBuyPrice * totalBuyQty) : 0
     return {
       stock, netQty: 0, totalBuyQty, totalSellQty, avgBuyPrice, avgSellPrice,
-      avgCost: 0, totalCost: 0, pnl: 0, pnlRate: 0, realizedPnl, realizedPnlRate
+      avgCost: 0, totalCost: 0, pnl: 0, pnlRate: 0, realizedPnl, realizedPnlRate, totalFee
     }
   }
   return null
@@ -1047,35 +1185,48 @@ const closedPositions = computed(() => {
     })
 })
 
-// 根据时间筛选已平仓列表
+// 根据时间和模式筛选已平仓列表
 const filteredClosedPositions = computed(() => {
-  if (timeFilter.value === 'all') return closedPositions.value
+  let result = closedPositions.value
 
-  const now = new Date()
-  let startDate = ''
+  // 时间筛选
+  if (timeFilter.value !== 'all') {
+    const now = new Date()
+    let startDate = ''
 
-  if (timeFilter.value === 'week') {
-    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-    startDate = weekAgo.toISOString().slice(0, 10)
-  } else if (timeFilter.value === 'month') {
-    const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
-    startDate = monthAgo.toISOString().slice(0, 10)
-  } else if (timeFilter.value === 'quarter') {
-    const quarterAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
-    startDate = quarterAgo.toISOString().slice(0, 10)
-  } else if (timeFilter.value === 'custom') {
-    startDate = customStartDate.value
+    if (timeFilter.value === 'week') {
+      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+      startDate = weekAgo.toISOString().slice(0, 10)
+    } else if (timeFilter.value === 'month') {
+      const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+      startDate = monthAgo.toISOString().slice(0, 10)
+    } else if (timeFilter.value === 'quarter') {
+      const quarterAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+      startDate = quarterAgo.toISOString().slice(0, 10)
+    } else if (timeFilter.value === 'custom') {
+      startDate = customStartDate.value
+    }
+
+    if (startDate) {
+      result = result.filter(p => {
+        const lastDate = getLastTradeDate(p)
+        if (timeFilter.value === 'custom' && customEndDate.value) {
+          return lastDate >= startDate && lastDate <= customEndDate.value
+        }
+        return lastDate >= startDate
+      })
+    }
   }
 
-  if (!startDate) return closedPositions.value
+  // 模式筛选
+  if (closedModeFilter.value) {
+    result = result.filter(p => {
+      const buyTrades = p.stock.trades.filter(t => t.direction === 'buy')
+      return buyTrades.some(t => t.modeId === closedModeFilter.value)
+    })
+  }
 
-  return closedPositions.value.filter(p => {
-    const lastDate = getLastTradeDate(p)
-    if (timeFilter.value === 'custom' && customEndDate.value) {
-      return lastDate >= startDate && lastDate <= customEndDate.value
-    }
-    return lastDate >= startDate
-  })
+  return result
 })
 
 // 获取持仓的模式（取买入交易的模式）
@@ -1100,6 +1251,7 @@ const totalValue = computed(() =>
 const totalPnl = computed(() => totalValue.value - totalCost.value)
 const totalPnlRate = computed(() => totalCost.value > 0 ? totalPnl.value / totalCost.value : 0)
 const realizedPnl = computed(() => allPositions.value.reduce((sum, p) => sum + p.realizedPnl, 0))
+const totalCommission = computed(() => allPositions.value.reduce((sum, p) => sum + p.totalFee, 0))
 
 // 交易记录
 interface TradeRow {
@@ -1149,6 +1301,7 @@ interface ModeStat {
   lossCount: number
   winRate: number
   totalPnl: number
+  totalFee?: number
 }
 
 const modeStats = computed<ModeStat[]>(() => {
@@ -1168,7 +1321,8 @@ const modeStats = computed<ModeStat[]>(() => {
         winCount: 0,
         lossCount: 0,
         winRate: 0,
-        totalPnl: 0
+        totalPnl: 0,
+        totalFee: 0
       })
     }
     const s = stats.get(modeId)!
@@ -1178,6 +1332,46 @@ const modeStats = computed<ModeStat[]>(() => {
       s.lossCount++
     }
     s.totalPnl += p.realizedPnl
+    s.totalFee! += p.totalFee
+  }
+
+  const result = Array.from(stats.values())
+  for (const s of result) {
+    const total = s.winCount + s.lossCount
+    s.winRate = total > 0 ? (s.winCount / total) * 100 : 0
+  }
+  return result.sort((a, b) => b.totalPnl - a.totalPnl)
+})
+
+// 已平仓模式统计（筛选后）
+const closedModeStats = computed<ModeStat[]>(() => {
+  const stats = new Map<string, ModeStat>()
+
+  for (const p of filteredClosedPositions.value) {
+    const stock = p.stock
+    const buyTrades = stock.trades.filter(t => t.direction === 'buy')
+    const modeId = buyTrades[0]?.modeId || ''
+    if (!stats.has(modeId)) {
+      const mode = tradeModeStore.getMode(modeId)
+      stats.set(modeId, {
+        modeId,
+        label: mode?.name || '其他',
+        color: mode?.color || '#8b949e',
+        winCount: 0,
+        lossCount: 0,
+        winRate: 0,
+        totalPnl: 0,
+        totalFee: 0
+      })
+    }
+    const s = stats.get(modeId)!
+    if (p.realizedPnl >= 0) {
+      s.winCount++
+    } else {
+      s.lossCount++
+    }
+    s.totalPnl += p.realizedPnl
+    s.totalFee! += p.totalFee
   }
 
   const result = Array.from(stats.values())
@@ -1205,6 +1399,12 @@ function updatePrice(stockId: string, event: Event) {
   if (!isNaN(price) && price > 0) {
     stockStore.updateStock(stockId, { currentPrice: price })
   }
+}
+
+function updateCloseNote(stockId: string, event: Event) {
+  const target = event.target as HTMLInputElement
+  const note = target.value.trim()
+  stockStore.updateStock(stockId, { closeNote: note })
 }
 </script>
 
@@ -1493,17 +1693,38 @@ function updatePrice(stockId: string, event: Event) {
   border-bottom: 1px solid var(--border-color);
 }
 
-.time-filter-bar {
+.filter-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+
+.time-filter-section {
   display: flex;
   gap: 8px;
   align-items: center;
-  margin-bottom: 16px;
-  padding: 8px 12px;
-  background: var(--bg-secondary);
-  border-radius: 8px;
+  flex-wrap: wrap;
 }
 
-.time-filter-btn {
+.mode-filter-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.filter-btn {
   padding: 6px 12px;
   font-size: 12px;
   border: 1px solid var(--border-color);
@@ -1514,14 +1735,30 @@ function updatePrice(stockId: string, event: Event) {
   transition: all 0.2s;
 }
 
-.time-filter-btn:hover {
+.filter-btn:hover {
   border-color: var(--color-blue);
   color: var(--color-blue);
 }
 
-.time-filter-btn.active {
+.filter-btn.active {
   background: var(--color-blue);
   color: #fff;
+  border-color: var(--color-blue);
+}
+
+.mode-filter-select {
+  padding: 6px 12px;
+  font-size: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-radius: 4px;
+  cursor: pointer;
+  min-width: 120px;
+}
+
+.mode-filter-select:focus {
+  outline: none;
   border-color: var(--color-blue);
 }
 
@@ -1639,7 +1876,7 @@ function updatePrice(stockId: string, event: Event) {
 
 .pos-grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(8, 1fr);
   gap: 8px;
 }
 
@@ -1667,6 +1904,36 @@ function updatePrice(stockId: string, event: Event) {
   color: #3fb950;
 }
 
+.pos-note-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
+}
+
+.note-input {
+  flex: 1;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 6px 10px;
+  color: var(--text-primary);
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.note-input:focus {
+  outline: none;
+  border-color: var(--color-blue);
+  background: var(--bg-secondary);
+}
+
+.note-input::placeholder {
+  color: var(--text-tertiary);
+}
+
 .price-input {
   width: 70px;
   background: var(--bg-tertiary);
@@ -1681,6 +1948,128 @@ function updatePrice(stockId: string, event: Event) {
 .price-input:focus {
   outline: none;
   border-color: var(--color-blue);
+}
+
+.fee-text {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* 手续费设置 */
+.commission-settings {
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.commission-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.commission-row:last-child {
+  margin-bottom: 0;
+}
+
+.commission-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 70px;
+}
+
+.commission-input {
+  width: 80px;
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-radius: 4px;
+}
+
+.commission-input:focus {
+  outline: none;
+  border-color: var(--color-blue);
+}
+
+.commission-hint {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+/* 已平仓模式统计 */
+.closed-mode-stats {
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.closed-stats-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+}
+
+.closed-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.closed-stat-item {
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.closed-stat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.closed-stat-name {
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.closed-stat-rate {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.closed-stat-rate.win {
+  color: #f85149;
+}
+
+.closed-stat-rate.loss {
+  color: #3fb950;
+}
+
+.closed-stat-detail {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.closed-stat-detail .win {
+  color: #f85149;
+}
+
+.closed-stat-detail .loss {
+  color: #3fb950;
+}
+
+.closed-stat-fee {
+  font-size: 10px;
+  color: var(--text-tertiary);
 }
 
 /* 交易记录表格 */
@@ -1965,7 +2354,17 @@ function updatePrice(stockId: string, event: Event) {
   }
 
   .pos-grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .time-filter-section,
+  .mode-filter-section {
+    width: 100%;
   }
 
   .trade-table {

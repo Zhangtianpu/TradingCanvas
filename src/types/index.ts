@@ -86,6 +86,7 @@ export interface Stock {
   limitUpRecords: LimitUpRecord[]
   trades: TradeRecord[]
   currentPrice?: number         // 当前价格（手动输入）
+  closeNote?: string            // 平仓备注
   createdAt: string
   updatedAt: string
 }
@@ -198,6 +199,8 @@ export interface AppSettings {
   autoBackup: boolean           // 是否开启自动备份
   autoBackupInterval: number    // 自动备份间隔（分钟）
   lastAutoBackup: string        // 上次自动备份时间
+  commissionRate?: number       // 手续费率（默认0.0003，即万三）
+  stampDutyRate?: number        // 印花税率（默认0.001，即千一，仅卖出时收取）
 }
 
 // 标签映射
