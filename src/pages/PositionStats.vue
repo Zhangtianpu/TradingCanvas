@@ -165,7 +165,7 @@
             </span>
           </div>
           <div class="closed-stat-fee">
-            <span>手续费: {{ formatMoney(stat.totalFee) }}</span>
+            <span>手续费: {{ formatMoney(stat.totalFee || 0) }}</span>
           </div>
         </div>
       </div>
