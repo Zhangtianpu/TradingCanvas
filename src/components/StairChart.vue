@@ -238,13 +238,17 @@ const timeRanges = [
   { label: '10天', value: 10 },
   { label: '20天', value: 20 },
   { label: '30天', value: 30 },
-  { label: '60天', value: 60 }
+  { label: '60天', value: 60 },
+  { label: '全部', value: 'all' }
 ]
-const stairRange = ref(20)
+const stairRange = ref<number | string>(20)
 const customStairRange = ref<number | null>(null)
 
 // 根据独立 range 截取的显示数据（props.emotions 为从旧到新的全部数据）
 const displayEmotions = computed(() => {
+  if (stairRange.value === 'all') {
+    return props.emotions
+  }
   return props.emotions.slice(-stairRange.value)
 })
 
