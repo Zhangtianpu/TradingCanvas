@@ -465,8 +465,18 @@ function createChart(canvas: HTMLCanvasElement, config: any) {
           borderWidth: 2.5,
           fill: config.fill,
           tension: 0.4,
-          pointRadius: recentEmotions.value.map(e => e.isBreakthrough ? 5 : 3),
-          pointBackgroundColor: recentEmotions.value.map(e => e.isBreakthrough ? '#f85149' : config.color),
+          pointRadius: recentEmotions.value.map(e => {
+            // 冰点和高度突破显示大点
+            if (e.isIcePoint || e.isBreakthrough) return 6
+            return 3
+          }),
+          pointBackgroundColor: recentEmotions.value.map(e => {
+            // 冰点显示蓝色
+            if (e.isIcePoint) return '#58a6ff'
+            // 高度突破显示红色
+            if (e.isBreakthrough) return '#f85149'
+            return config.color
+          }),
           pointBorderColor: 'rgba(22,27,34,0.8)',
           pointBorderWidth: 1.5,
           pointHoverRadius: 7
@@ -481,10 +491,20 @@ function createChart(canvas: HTMLCanvasElement, config: any) {
             callbacks: {
               afterLabel: function(context: any) {
                 const e = recentEmotions.value[context.dataIndex]
-                if (e.spaceBoardStocks && e.spaceBoardStocks.length > 0) {
-                  return e.spaceBoardStocks.map((s: any) => `${s.name}(${s.height}板)`)
+                const labels: string[] = []
+                // 显示冰点标记
+                if (e.isIcePoint) {
+                  labels.push('🔵 冰点')
                 }
-                return ''
+                // 显示高度突破标记
+                if (e.isBreakthrough) {
+                  labels.push('🔴 高度突破')
+                }
+                // 显示空间板个股
+                if (e.spaceBoardStocks && e.spaceBoardStocks.length > 0) {
+                  labels.push(...e.spaceBoardStocks.map((s: any) => `${s.name}(${s.height}板)`))
+                }
+                return labels
               }
             }
           }
