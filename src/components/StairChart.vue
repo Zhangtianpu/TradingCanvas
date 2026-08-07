@@ -297,6 +297,86 @@ const router = useRouter()
 const emotionStore = useEmotionStore()
 const stockStore = useStockStore()
 
+// ===== 独立标签管理系统 =====
+// 每个图表实例独立存储标签数据，不共享
+interface TagFlags {
+  isBreakthrough: boolean
+  isMedian: boolean
+  isIcePoint: boolean
+  isAnnouncement: boolean
+}
+
+const tagStorageKey = computed(() => `stairChartTags_${props.chartId || 'default'}`)
+const tagOverrides = ref<Record<string, Record<string, TagFlags>>>({})
+
+// 从localStorage加载标签覆盖数据
+function loadTagOverrides() {
+  const saved = localStorage.getItem(tagStorageKey.value)
+  if (saved) {
+    try {
+      tagOverrides.value = JSON.parse(saved)
+    } catch {
+      tagOverrides.value = {}
+    }
+  }
+}
+
+// 保存标签覆盖数据到localStorage
+function persistTagOverrides() {
+  localStorage.setItem(tagStorageKey.value, JSON.stringify(tagOverrides.value))
+  // 通知其他组件标签已更新
+  window.dispatchEvent(new CustomEvent('stairChartTagsUpdated', { detail: { chartId: props.chartId } }))
+}
+
+// 生成个股标签的key
+function getStockTagKey(stockName: string, height: number): string {
+  return `${stockName}_${height}`
+}
+
+// 获取某只股票的标签覆盖
+function getStockTags(date: string, stockName: string, height: number): TagFlags | null {
+  const dateTags = tagOverrides.value[date]
+  if (!dateTags) return null
+  return dateTags[getStockTagKey(stockName, height)] || null
+}
+
+// 设置某只股票的标签覆盖
+function setStockTags(date: string, stockName: string, height: number, tags: TagFlags) {
+  if (!tagOverrides.value[date]) {
+    tagOverrides.value[date] = {}
+  }
+  tagOverrides.value[date][getStockTagKey(stockName, height)] = tags
+  persistTagOverrides()
+}
+
+// 删除某只股票的标签覆盖
+function removeStockTags(date: string, stockName: string, height: number) {
+  if (tagOverrides.value[date]) {
+    delete tagOverrides.value[date][getStockTagKey(stockName, height)]
+    persistTagOverrides()
+  }
+}
+
+// 合并基础数据和标签覆盖
+function applyTagOverrides(e: EmotionDaily, stock: SpaceBoardStock | null): SpaceBoardStock | null {
+  if (!stock) return null
+  const tags = getStockTags(e.date, stock.name, stock.height)
+  if (tags) {
+    return {
+      ...stock,
+      isBreakthrough: tags.isBreakthrough,
+      isMedian: tags.isMedian,
+      isIcePoint: tags.isIcePoint,
+      isAnnouncement: tags.isAnnouncement
+    }
+  }
+  // 没有覆盖表时使用基础数据中的标签
+  return stock
+}
+
+// 初始化加载标签数据
+loadTagOverrides()
+
 // 连板楼梯图独立的显示范围控制
 const timeRanges = [
   { label: '10天', value: 10 },
@@ -517,18 +597,19 @@ function hasStockAtHeight(e: EmotionDaily, h: number): boolean {
   return e.spaceBoardStocks.some(s => s.height === h)
 }
 
-// 获取该高度的股票信息
+// 获取该高度的股票信息（合并独立标签）
 function getStockAtHeight(e: EmotionDaily, h: number): SpaceBoardStock | null {
   if (!e.spaceBoardStocks) return null
-  return e.spaceBoardStocks.find(s => s.height === h) || null
+  const stock = e.spaceBoardStocks.find(s => s.height === h) || null
+  return applyTagOverrides(e, stock)
 }
 
-// 获取第一个股票信息（优先返回最高板的股票）
+// 获取第一个股票信息（优先返回最高板的股票，合并独立标签）
 function getFirstStock(e: EmotionDaily): SpaceBoardStock | null {
   if (!e.spaceBoardStocks || e.spaceBoardStocks.length === 0) return null
   // 优先返回height等于maxBoardHeight的股票
   const maxStock = e.spaceBoardStocks.find(s => s.height === e.maxBoardHeight)
-  return maxStock || e.spaceBoardStocks[0]
+  return applyTagOverrides(e, maxStock || e.spaceBoardStocks[0])
 }
 
 // 获取单元格样式类
@@ -638,7 +719,7 @@ function saveEdit() {
   const { emotion, height } = editingCell.value
   const stockName = editForm.value.stockName.trim()
 
-  // 更新空间板股票列表
+  // 更新空间板股票列表（基础数据共享，不含标签）
   const stocks: SpaceBoardStock[] = emotion.spaceBoardStocks ? [...emotion.spaceBoardStocks] : []
 
   // 移除同高度的旧股票
@@ -647,16 +728,12 @@ function saveEdit() {
     stocks.splice(existingIdx, 1)
   }
 
-  // 添加新股票（带标签）
+  // 添加新股票（基础数据，标签独立存储）
   if (stockName) {
     stocks.push({
       name: stockName,
       height,
-      stockId: editForm.value.selectedStockId || undefined,
-      isBreakthrough: editForm.value.isBreakthrough,
-      isMedian: editForm.value.isMedian,
-      isIcePoint: editForm.value.isIcePoint,
-      isAnnouncement: editForm.value.isAnnouncement
+      stockId: editForm.value.selectedStockId || undefined
     })
   }
 
@@ -665,13 +742,23 @@ function saveEdit() {
     ? Math.max(...stocks.map(s => s.height))
     : emotion.maxBoardHeight
 
-  // 更新情绪数据
+  // 更新情绪数据（基础数据，不含标签）
   emotionStore.addOrUpdateEmotion({
     ...emotion,
     maxBoardHeight,
     spaceBoardStocks: stocks,
     remark: editForm.value.remark.trim()
   })
+
+  // 保存标签到独立的覆盖表（每个图表实例独立）
+  if (stockName) {
+    setStockTags(emotion.date, stockName, height, {
+      isBreakthrough: editForm.value.isBreakthrough,
+      isMedian: editForm.value.isMedian,
+      isIcePoint: editForm.value.isIcePoint,
+      isAnnouncement: editForm.value.isAnnouncement
+    })
+  }
 
   closeEdit()
 }
@@ -681,6 +768,9 @@ function deleteEdit() {
   if (!editingCell.value) return
 
   const { emotion, height } = editingCell.value
+
+  // 获取要删除的股票名称（用于清理标签覆盖）
+  const stockToDelete = emotion.spaceBoardStocks?.find(s => s.height === height)
 
   // 更新空间板股票列表
   const stocks: SpaceBoardStock[] = emotion.spaceBoardStocks
@@ -696,9 +786,13 @@ function deleteEdit() {
   emotionStore.addOrUpdateEmotion({
     ...emotion,
     maxBoardHeight,
-    spaceBoardStocks: stocks,
-    isBreakthrough: false
+    spaceBoardStocks: stocks
   })
+
+  // 删除该图表实例中该股票的标签覆盖
+  if (stockToDelete) {
+    removeStockTags(emotion.date, stockToDelete.name, height)
+  }
 
   closeEdit()
 }

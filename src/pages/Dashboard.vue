@@ -33,8 +33,8 @@
                 </span>
                 <span v-if="!latestEmotion?.spaceBoardStocks?.length">-</span>
               </div>
-              <div class="space-status" :class="{ active: latestEmotion?.isBreakthrough }">
-                {{ latestEmotion?.isBreakthrough ? '高度突破' : '未突破' }}
+              <div class="space-status" :class="{ active: latestEmotion ? hasBreakthroughInChart1(latestEmotion) : false }">
+                {{ latestEmotion && hasBreakthroughInChart1(latestEmotion) ? '高度突破' : '未突破' }}
               </div>
             </div>
           </div>
@@ -147,9 +147,9 @@
                       <td class="down">{{ e.downCount || '-' }}</td>
                       <td class="up">{{ e.limitUpCount || '-' }}</td>
                       <td class="down">{{ e.limitDownCount || '-' }}</td>
-                      <td class="height-col" :class="{ breakthrough: e.isBreakthrough }">
+                      <td class="height-col" :class="{ breakthrough: hasBreakthroughInChart1(e) }">
                         {{ e.maxBoardHeight || '-' }}板
-                        <span v-if="e.isBreakthrough" class="breakthrough-tag">破</span>
+                        <span v-if="hasBreakthroughInChart1(e)" class="breakthrough-tag">破</span>
                       </td>
                       <td class="stock-col">
                         <span v-for="(s, idx) in e.spaceBoardStocks" :key="idx" class="stock-item">
@@ -175,12 +175,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useThemeStore } from '@/stores/theme'
 import { useStockStore } from '@/stores/stock'
 import { useEmotionStore } from '@/stores/emotion'
 import { useReviewStore } from '@/stores/review'
 import { today } from '@/composables/useDate'
+import type { EmotionDaily } from '@/types'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -363,6 +364,35 @@ const recentEmotions = computed(() => {
   return [...emotionStore.sortedEmotions].reverse().slice(-selectedRange.value)
 })
 
+// 读取stairChart1的标签覆盖数据（空间板高度折线图以第一个天梯图为准）
+function getChart1TagOverrides(): Record<string, Record<string, any>> {
+  const saved = localStorage.getItem('stairChartTags_stairChart1')
+  if (saved) {
+    try {
+      return JSON.parse(saved)
+    } catch {
+      return {}
+    }
+  }
+  return {}
+}
+
+// 检查某日在stairChart1中是否有突破标记
+function hasBreakthroughInChart1(e: EmotionDaily): boolean {
+  const allTags = getChart1TagOverrides()
+  const dateTags = allTags[e.date]
+  if (!dateTags) return e.isBreakthrough // 没有覆盖表时用原始数据
+  return Object.values(dateTags).some((t: any) => t.isBreakthrough)
+}
+
+// 检查某日在stairChart1中是否有冰点标记
+function hasIcePointInChart1(e: EmotionDaily): boolean {
+  const allTags = getChart1TagOverrides()
+  const dateTags = allTags[e.date]
+  if (!dateTags) return e.isIcePoint // 没有覆盖表时用原始数据
+  return Object.values(dateTags).some((t: any) => t.isIcePoint)
+}
+
 // 全部情绪数据（从旧到新），供连板楼梯图组件独立控制显示范围
 const allSortedEmotions = computed(() => {
   return [...emotionStore.sortedEmotions].reverse()
@@ -472,15 +502,14 @@ function createChart(canvas: HTMLCanvasElement, config: any) {
           fill: config.fill,
           tension: 0.4,
           pointRadius: recentEmotions.value.map(e => {
-            // 冰点和高度突破显示大点
-            if (e.isIcePoint || e.isBreakthrough) return 6
+            // 以第一个天梯图的标签为准
+            if (hasIcePointInChart1(e) || hasBreakthroughInChart1(e)) return 6
             return 3
           }),
           pointBackgroundColor: recentEmotions.value.map(e => {
-            // 冰点显示蓝色
-            if (e.isIcePoint) return '#58a6ff'
-            // 高度突破显示红色
-            if (e.isBreakthrough) return '#f85149'
+            // 以第一个天梯图的标签为准
+            if (hasIcePointInChart1(e)) return '#58a6ff'
+            if (hasBreakthroughInChart1(e)) return '#f85149'
             return config.color
           }),
           pointBorderColor: 'rgba(22,27,34,0.8)',
@@ -498,12 +527,11 @@ function createChart(canvas: HTMLCanvasElement, config: any) {
               afterLabel: function(context: any) {
                 const e = recentEmotions.value[context.dataIndex]
                 const labels: string[] = []
-                // 显示冰点标记
-                if (e.isIcePoint) {
+                // 以第一个天梯图的标签为准
+                if (hasIcePointInChart1(e)) {
                   labels.push('🔵 冰点')
                 }
-                // 显示高度突破标记
-                if (e.isBreakthrough) {
+                if (hasBreakthroughInChart1(e)) {
                   labels.push('🔴 高度突破')
                 }
                 // 显示空间板个股
@@ -590,9 +618,23 @@ watch(selectedRange, async () => {
   renderAllCharts()
 })
 
+// 监听天梯图标签更新（以第一个天梯图为准）
+function onStairChartTagsUpdated(e: Event) {
+  const detail = (e as CustomEvent).detail
+  if (detail?.chartId === 'stairChart1') {
+    destroyAllCharts()
+    nextTick(() => renderAllCharts())
+  }
+}
+
 onMounted(async () => {
   await nextTick()
   setTimeout(() => renderAllCharts(), 100)
+  window.addEventListener('stairChartTagsUpdated', onStairChartTagsUpdated)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('stairChartTagsUpdated', onStairChartTagsUpdated)
 })
 
 watch(() => emotionStore.sortedEmotions.length, async () => {
