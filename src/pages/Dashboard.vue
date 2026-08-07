@@ -47,7 +47,12 @@
 
         <!-- 连板楼梯图 -->
         <template v-else-if="module.id === 'stairChart'">
-          <StairChart v-if="allSortedEmotions.length > 0" :emotions="allSortedEmotions" />
+          <StairChart v-if="allSortedEmotions.length > 0" :emotions="allSortedEmotions" title="连板楼梯图" />
+        </template>
+
+        <!-- 连板楼梯图2 -->
+        <template v-else-if="module.id === 'stairChart2'">
+          <StairChart v-if="allSortedEmotions.length > 0" :emotions="allSortedEmotions" title="连板楼梯图2" />
         </template>
 
         <!-- 趋势图表 -->
@@ -221,6 +226,7 @@ const defaultModules: DashboardModule[] = [
   { id: 'spaceBoard', name: '空间板' },
   { id: 'positions', name: '持仓概览' },
   { id: 'stairChart', name: '连板楼梯图' },
+  { id: 'stairChart2', name: '连板楼梯图2' },
   { id: 'cycle', name: '交易风格与情绪周期' },
   { id: 'charts', name: '趋势图表' },
   { id: 'history', name: '历史记录' },

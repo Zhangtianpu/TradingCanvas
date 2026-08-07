@@ -1,7 +1,7 @@
 <template>
   <div class="stair-chart">
     <div class="chart-header">
-      <span class="chart-title">连板楼梯图</span>
+      <span class="chart-title">{{ title }}</span>
       <div class="chart-legend">
         <span class="legend-item"><span class="dot breakthrough"></span>突破</span>
         <span class="legend-item"><span class="dot median"></span>中位</span>
@@ -227,7 +227,11 @@ import { useStockStore } from '@/stores/stock'
 const props = defineProps<{
   emotions: EmotionDaily[]
   dateRange?: number
+  title?: string
 }>()
+
+// 默认标题
+const title = computed(() => props.title || '连板楼梯图')
 
 const router = useRouter()
 const emotionStore = useEmotionStore()
