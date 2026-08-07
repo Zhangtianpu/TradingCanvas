@@ -47,12 +47,12 @@
 
         <!-- 连板楼梯图 -->
         <template v-else-if="module.id === 'stairChart'">
-          <StairChart v-if="allSortedEmotions.length > 0" :emotions="allSortedEmotions" title="连板楼梯图" />
+          <StairChart v-if="allSortedEmotions.length > 0" :emotions="allSortedEmotions" title="连板楼梯图" chartId="stairChart1" />
         </template>
 
         <!-- 连板楼梯图2 -->
         <template v-else-if="module.id === 'stairChart2'">
-          <StairChart v-if="allSortedEmotions.length > 0" :emotions="allSortedEmotions" title="连板楼梯图2" />
+          <StairChart v-if="allSortedEmotions.length > 0" :emotions="allSortedEmotions" title="连板楼梯图2" chartId="stairChart2" />
         </template>
 
         <!-- 趋势图表 -->

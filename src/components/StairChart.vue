@@ -1,7 +1,21 @@
 <template>
   <div class="stair-chart">
     <div class="chart-header">
-      <span class="chart-title">{{ title }}</span>
+      <div class="title-wrapper">
+        <input
+          v-if="editingTitle"
+          v-model="customTitle"
+          class="title-input"
+          @blur="saveTitle"
+          @keyup.enter="saveTitle"
+          @keyup.esc="cancelEditTitle"
+          ref="titleInputRef"
+        />
+        <span v-else class="chart-title clickable" @click="startEditTitle" title="点击修改名称">
+          {{ displayTitle }}
+          <span class="edit-icon">✎</span>
+        </span>
+      </div>
       <div class="chart-legend">
         <span class="legend-item"><span class="dot breakthrough"></span>突破</span>
         <span class="legend-item"><span class="dot median"></span>中位</span>
@@ -228,10 +242,56 @@ const props = defineProps<{
   emotions: EmotionDaily[]
   dateRange?: number
   title?: string
+  chartId?: string
 }>()
 
-// 默认标题
-const title = computed(() => props.title || '连板楼梯图')
+// 自定义标题（支持持久化，每个chartId独立存储）
+const storageKey = computed(() => `stairChartTitle_${props.chartId || props.title || 'default'}`)
+const customTitle = ref('')
+const editingTitle = ref(false)
+const titleInputRef = ref<HTMLInputElement | null>(null)
+
+// 从localStorage加载自定义标题
+function loadCustomTitle() {
+  const saved = localStorage.getItem(storageKey.value)
+  customTitle.value = saved || props.title || '连板楼梯图'
+}
+
+// 显示标题：优先显示自定义标题
+const displayTitle = computed(() => customTitle.value || props.title || '连板楼梯图')
+
+// 兼容旧代码
+const title = computed(() => displayTitle.value)
+
+function startEditTitle() {
+  editingTitle.value = true
+  customTitle.value = displayTitle.value
+  nextTick(() => {
+    titleInputRef.value?.focus()
+    titleInputRef.value?.select()
+  })
+}
+
+function saveTitle() {
+  const trimmed = customTitle.value.trim()
+  if (trimmed) {
+    localStorage.setItem(storageKey.value, trimmed)
+    customTitle.value = trimmed
+  } else {
+    // 空值时恢复默认
+    localStorage.removeItem(storageKey.value)
+    customTitle.value = props.title || '连板楼梯图'
+  }
+  editingTitle.value = false
+}
+
+function cancelEditTitle() {
+  editingTitle.value = false
+  customTitle.value = displayTitle.value
+}
+
+// 初始化加载
+loadCustomTitle()
 
 const router = useRouter()
 const emotionStore = useEmotionStore()
@@ -663,6 +723,48 @@ function deleteEdit() {
 .chart-title {
   font-size: 13px;
   font-weight: 500;
+}
+
+.chart-title.clickable {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.chart-title.clickable:hover {
+  background: var(--bg-tertiary);
+}
+
+.edit-icon {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.chart-title.clickable:hover .edit-icon {
+  opacity: 1;
+}
+
+.title-wrapper {
+  display: flex;
+  align-items: center;
+}
+
+.title-input {
+  font-size: 13px;
+  font-weight: 500;
+  padding: 2px 6px;
+  background: var(--bg-primary);
+  border: 1px solid var(--color-blue);
+  border-radius: 4px;
+  color: var(--text-primary);
+  outline: none;
+  width: 160px;
 }
 
 /* 显示范围控制 */
