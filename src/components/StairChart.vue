@@ -66,7 +66,7 @@
                 v-for="e in displayEmotions"
                 :key="e.id"
                 type="text"
-                :value="e.heightCalc ?? ''"
+                :value="getHeightCalc(e)"
                 @change="(ev) => updateHeightCalc(e, (ev.target as HTMLInputElement).value)"
                 @mousedown.stop
                 draggable="false"
@@ -376,6 +376,40 @@ function applyTagOverrides(e: EmotionDaily, stock: SpaceBoardStock | null): Spac
 
 // 初始化加载标签数据
 loadTagOverrides()
+
+// ===== 独立高度计算存储 =====
+// 每个图表实例独立存储heightCalc，不共享
+const heightCalcStorageKey = computed(() => `stairChartHeightCalc_${props.chartId || 'default'}`)
+const heightCalcOverrides = ref<Record<string, string>>({})
+
+function loadHeightCalcOverrides() {
+  const saved = localStorage.getItem(heightCalcStorageKey.value)
+  if (saved) {
+    try {
+      heightCalcOverrides.value = JSON.parse(saved)
+    } catch {
+      heightCalcOverrides.value = {}
+    }
+  }
+}
+
+function persistHeightCalcOverrides() {
+  localStorage.setItem(heightCalcStorageKey.value, JSON.stringify(heightCalcOverrides.value))
+}
+
+// 获取某日的高度计算值（优先使用独立覆盖表）
+function getHeightCalc(e: EmotionDaily): string {
+  return heightCalcOverrides.value[e.date] ?? e.heightCalc ?? ''
+}
+
+// 更新高度计算结果（独立存储，不共享）
+function updateHeightCalc(e: EmotionDaily, value: string) {
+  heightCalcOverrides.value[e.date] = value.trim()
+  persistHeightCalcOverrides()
+}
+
+// 初始化加载高度计算数据
+loadHeightCalcOverrides()
 
 // 连板楼梯图独立的显示范围控制
 const timeRanges = [
@@ -701,14 +735,6 @@ function handleDateClick(e: EmotionDaily) {
   emotionStore.addOrUpdateEmotion({
     ...e,
     isClear: !e.isClear
-  })
-}
-
-// 更新高度计算结果（独立字段，不影响表格股票）
-function updateHeightCalc(e: EmotionDaily, value: string) {
-  emotionStore.addOrUpdateEmotion({
-    ...e,
-    heightCalc: value.trim()
   })
 }
 
