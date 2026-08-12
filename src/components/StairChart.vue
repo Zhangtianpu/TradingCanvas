@@ -202,59 +202,67 @@
               ref="editInputRef"
             />
           </div>
-          <div class="edit-row">
-            <label>
-              <input type="checkbox" v-model="editForm.isBreakthrough" />
-              高度突破
-            </label>
-          </div>
-          <div class="edit-row">
-            <label>
-              <input type="checkbox" v-model="editForm.isMedian" />
-              中位标记
-            </label>
-          </div>
-          <div class="edit-row">
-            <label>
-              <input type="checkbox" v-model="editForm.isIcePoint" />
-              冰点标记
-            </label>
-          </div>
-          <div class="edit-row">
-            <label>
-              <input type="checkbox" v-model="editForm.isAnnouncement" />
-              公告标记
-            </label>
-          </div>
-          <div class="edit-row">
-            <label>
-              <input type="checkbox" v-model="editForm.isSpaceFirst" />
-              空间板先手
-            </label>
-          </div>
-          <div class="edit-row">
-            <label>
-              <input type="checkbox" v-model="editForm.isSpace" />
-              空间板
-            </label>
-          </div>
-          <div class="edit-row">
-            <label>
-              <input type="checkbox" v-model="editForm.isNextDayBroken" />
-              次日炸板
-            </label>
-          </div>
-          <div class="edit-row">
-            <label>
-              <input type="checkbox" v-model="editForm.isNextDayNoPremium" />
-              次日无溢价
-            </label>
-          </div>
-          <div class="edit-row">
-            <label>
-              <input type="checkbox" v-model="editForm.isNextDayPremium" />
-              次日有溢价
-            </label>
+          <div class="tag-grid">
+            <div class="tag-col">
+              <div class="edit-row">
+                <label>
+                  <input type="checkbox" v-model="editForm.isBreakthrough" />
+                  高度突破
+                </label>
+              </div>
+              <div class="edit-row">
+                <label>
+                  <input type="checkbox" v-model="editForm.isMedian" />
+                  中位标记
+                </label>
+              </div>
+              <div class="edit-row">
+                <label>
+                  <input type="checkbox" v-model="editForm.isAnnouncement" />
+                  公告标记
+                </label>
+              </div>
+              <div class="edit-row">
+                <label>
+                  <input type="checkbox" v-model="editForm.isIcePoint" />
+                  冰点标记
+                </label>
+              </div>
+            </div>
+            <div class="tag-col">
+              <div class="edit-row">
+                <label>
+                  <input type="checkbox" v-model="editForm.isNextDayBroken" />
+                  次日炸板
+                </label>
+              </div>
+              <div class="edit-row">
+                <label>
+                  <input type="checkbox" v-model="editForm.isNextDayNoPremium" />
+                  次日无溢价
+                </label>
+              </div>
+              <div class="edit-row">
+                <label>
+                  <input type="checkbox" v-model="editForm.isNextDayPremium" />
+                  次日有溢价
+                </label>
+              </div>
+            </div>
+            <div class="tag-col">
+              <div class="edit-row">
+                <label>
+                  <input type="checkbox" v-model="editForm.isSpaceFirst" />
+                  空间板先手
+                </label>
+              </div>
+              <div class="edit-row">
+                <label>
+                  <input type="checkbox" v-model="editForm.isSpace" />
+                  空间板
+                </label>
+              </div>
+            </div>
           </div>
           <div class="edit-row">
             <label>备注信息</label>
@@ -1567,6 +1575,17 @@ function deleteEdit() {
   padding: 16px;
   overflow-y: auto;
   flex: 1;
+}
+
+.tag-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.tag-col .edit-row {
+  margin-bottom: 8px;
 }
 
 .edit-row {
