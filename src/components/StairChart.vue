@@ -115,6 +115,11 @@
                           <span v-if="getStockAtHeight(e, h)?.isIcePoint" class="ice-badge">冰</span>
                           <span v-if="getStockAtHeight(e, h)?.isMedian" class="median-badge">中</span>
                           <span v-if="getStockAtHeight(e, h)?.isBreakthrough" class="breakthrough-badge">突</span>
+                          <span v-if="getStockAtHeight(e, h)?.isSpaceFirst" class="space-first-badge">先</span>
+                          <span v-if="getStockAtHeight(e, h)?.isSpace" class="space-badge">空</span>
+                          <span v-if="getStockAtHeight(e, h)?.isNextDayBroken" class="broken-badge">炸</span>
+                          <span v-if="getStockAtHeight(e, h)?.isNextDayNoPremium" class="no-premium-badge">无</span>
+                          <span v-if="getStockAtHeight(e, h)?.isNextDayPremium" class="premium-badge">溢</span>
                         </div>
                       </div>
                       <span class="edit-hint" @click.stop="handleCellClick(e, h)">✎</span>
@@ -133,6 +138,11 @@
                           <span v-if="getFirstStock(e)?.isIcePoint" class="ice-badge">冰</span>
                           <span v-if="getFirstStock(e)?.isMedian" class="median-badge">中</span>
                           <span v-if="getFirstStock(e)?.isBreakthrough" class="breakthrough-badge">突</span>
+                          <span v-if="getFirstStock(e)?.isSpaceFirst" class="space-first-badge">先</span>
+                          <span v-if="getFirstStock(e)?.isSpace" class="space-badge">空</span>
+                          <span v-if="getFirstStock(e)?.isNextDayBroken" class="broken-badge">炸</span>
+                          <span v-if="getFirstStock(e)?.isNextDayNoPremium" class="no-premium-badge">无</span>
+                          <span v-if="getFirstStock(e)?.isNextDayPremium" class="premium-badge">溢</span>
                         </div>
                       </div>
                       <span class="edit-hint" @click.stop="handleCellClick(e, h)">✎</span>
@@ -214,6 +224,36 @@
             <label>
               <input type="checkbox" v-model="editForm.isAnnouncement" />
               公告标记
+            </label>
+          </div>
+          <div class="edit-row">
+            <label>
+              <input type="checkbox" v-model="editForm.isSpaceFirst" />
+              空间板先手
+            </label>
+          </div>
+          <div class="edit-row">
+            <label>
+              <input type="checkbox" v-model="editForm.isSpace" />
+              空间板
+            </label>
+          </div>
+          <div class="edit-row">
+            <label>
+              <input type="checkbox" v-model="editForm.isNextDayBroken" />
+              次日炸板
+            </label>
+          </div>
+          <div class="edit-row">
+            <label>
+              <input type="checkbox" v-model="editForm.isNextDayNoPremium" />
+              次日无溢价
+            </label>
+          </div>
+          <div class="edit-row">
+            <label>
+              <input type="checkbox" v-model="editForm.isNextDayPremium" />
+              次日有溢价
             </label>
           </div>
           <div class="edit-row">
@@ -304,6 +344,11 @@ interface TagFlags {
   isMedian: boolean
   isIcePoint: boolean
   isAnnouncement: boolean
+  isSpaceFirst: boolean
+  isSpace: boolean
+  isNextDayBroken: boolean
+  isNextDayNoPremium: boolean
+  isNextDayPremium: boolean
 }
 
 const tagStorageKey = computed(() => `stairChartTags_${props.chartId || 'default'}`)
@@ -367,7 +412,12 @@ function applyTagOverrides(e: EmotionDaily, stock: SpaceBoardStock | null): Spac
       isBreakthrough: tags.isBreakthrough,
       isMedian: tags.isMedian,
       isIcePoint: tags.isIcePoint,
-      isAnnouncement: tags.isAnnouncement
+      isAnnouncement: tags.isAnnouncement,
+      isSpaceFirst: tags.isSpaceFirst,
+      isSpace: tags.isSpace,
+      isNextDayBroken: tags.isNextDayBroken,
+      isNextDayNoPremium: tags.isNextDayNoPremium,
+      isNextDayPremium: tags.isNextDayPremium
     }
   }
   // 没有覆盖表时使用基础数据中的标签
@@ -566,6 +616,11 @@ const editForm = ref({
   isMedian: false,
   isIcePoint: false,
   isAnnouncement: false,
+  isSpaceFirst: false,
+  isSpace: false,
+  isNextDayBroken: false,
+  isNextDayNoPremium: false,
+  isNextDayPremium: false,
   remark: ''
 })
 const editInputRef = ref<HTMLInputElement | null>(null)
@@ -667,6 +722,21 @@ function getCellClass(e: EmotionDaily, h: number, idx: number): Record<string, b
     if (stock.isAnnouncement) {
       classes['announcement'] = true
     }
+    if (stock.isSpaceFirst) {
+      classes['space-first'] = true
+    }
+    if (stock.isSpace) {
+      classes['space-board'] = true
+    }
+    if (stock.isNextDayBroken) {
+      classes['next-day-broken'] = true
+    }
+    if (stock.isNextDayNoPremium) {
+      classes['next-day-no-premium'] = true
+    }
+    if (stock.isNextDayPremium) {
+      classes['next-day-premium'] = true
+    }
   } else if (h <= e.maxBoardHeight) {
     classes['filled'] = true
   }
@@ -716,6 +786,11 @@ function handleCellClick(e: EmotionDaily, h: number) {
     isMedian: existingStock?.isMedian || false,
     isIcePoint: existingStock?.isIcePoint || false,
     isAnnouncement: existingStock?.isAnnouncement || false,
+    isSpaceFirst: existingStock?.isSpaceFirst || false,
+    isSpace: existingStock?.isSpace || false,
+    isNextDayBroken: existingStock?.isNextDayBroken || false,
+    isNextDayNoPremium: existingStock?.isNextDayNoPremium || false,
+    isNextDayPremium: existingStock?.isNextDayPremium || false,
     remark: e.remark || ''
   }
 
@@ -782,7 +857,12 @@ function saveEdit() {
       isBreakthrough: editForm.value.isBreakthrough,
       isMedian: editForm.value.isMedian,
       isIcePoint: editForm.value.isIcePoint,
-      isAnnouncement: editForm.value.isAnnouncement
+      isAnnouncement: editForm.value.isAnnouncement,
+      isSpaceFirst: editForm.value.isSpaceFirst,
+      isSpace: editForm.value.isSpace,
+      isNextDayBroken: editForm.value.isNextDayBroken,
+      isNextDayNoPremium: editForm.value.isNextDayNoPremium,
+      isNextDayPremium: editForm.value.isNextDayPremium
     })
   }
 
@@ -1224,6 +1304,31 @@ function deleteEdit() {
   border-color: rgba(168, 85, 247, 0.5);
 }
 
+.cell.space-first {
+  background: rgba(255, 140, 0, 0.2);
+  border-color: rgba(255, 140, 0, 0.5);
+}
+
+.cell.space-board {
+  background: rgba(0, 191, 255, 0.15);
+  border-color: rgba(0, 191, 255, 0.4);
+}
+
+.cell.next-day-broken {
+  background: rgba(255, 69, 0, 0.2);
+  border-color: rgba(255, 69, 0, 0.5);
+}
+
+.cell.next-day-no-premium {
+  background: rgba(128, 128, 128, 0.2);
+  border-color: rgba(128, 128, 128, 0.5);
+}
+
+.cell.next-day-premium {
+  background: rgba(255, 215, 0, 0.2);
+  border-color: rgba(255, 215, 0, 0.5);
+}
+
 .median-badge {
   display: inline-block;
   font-size: 9px;
@@ -1259,6 +1364,56 @@ function deleteEdit() {
   font-size: 9px;
   background: #f85149;
   color: #fff;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.space-first-badge {
+  display: inline-block;
+  font-size: 9px;
+  background: #ff8c00;
+  color: #fff;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.space-badge {
+  display: inline-block;
+  font-size: 9px;
+  background: #00bfff;
+  color: #fff;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.broken-badge {
+  display: inline-block;
+  font-size: 9px;
+  background: #ff4500;
+  color: #fff;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.no-premium-badge {
+  display: inline-block;
+  font-size: 9px;
+  background: #808080;
+  color: #fff;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.premium-badge {
+  display: inline-block;
+  font-size: 9px;
+  background: #ffd700;
+  color: #1a1a1a;
   padding: 1px 4px;
   border-radius: 3px;
   font-weight: 500;

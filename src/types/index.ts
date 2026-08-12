@@ -100,6 +100,11 @@ export interface SpaceBoardStock {
   isMedian?: boolean        // 中位
   isIcePoint?: boolean      // 冰点
   isAnnouncement?: boolean  // 公告
+  isSpaceFirst?: boolean    // 空间板先手
+  isSpace?: boolean         // 空间板
+  isNextDayBroken?: boolean // 次日炸板
+  isNextDayNoPremium?: boolean // 次日无溢价
+  isNextDayPremium?: boolean   // 次日有溢价
 }
 
 // 每日情绪

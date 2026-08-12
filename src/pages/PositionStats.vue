@@ -53,6 +53,9 @@
         />
         <span class="commission-hint">（不足时按此金额收取，默认5元）</span>
       </div>
+      <div class="commission-row">
+        <button class="btn-save-fees" @click="saveFeeSettings">保存设置</button>
+      </div>
     </div>
 
     <!-- 概览卡片 -->
@@ -555,6 +558,33 @@ const tab = ref<'positions' | 'closed' | 'mode-analysis' | 'trades'>('positions'
 const commissionRate = ref<number>(0.0003)  // 默认万三
 const stampDutyRate = ref<number>(0.001)     // 默认千一
 const minCommission = ref<number>(5)         // 默认最低5元
+
+// 从localStorage加载保存的手续费设置
+function loadFeeSettings() {
+  const saved = localStorage.getItem('feeSettings')
+  if (saved) {
+    try {
+      const settings = JSON.parse(saved)
+      commissionRate.value = settings.commissionRate ?? 0.0003
+      stampDutyRate.value = settings.stampDutyRate ?? 0.001
+      minCommission.value = settings.minCommission ?? 5
+    } catch {
+      // 使用默认值
+    }
+  }
+}
+
+// 保存手续费设置到localStorage
+function saveFeeSettings() {
+  localStorage.setItem('feeSettings', JSON.stringify({
+    commissionRate: commissionRate.value,
+    stampDutyRate: stampDutyRate.value,
+    minCommission: minCommission.value
+  }))
+}
+
+// 初始化加载
+loadFeeSettings()
 
 function updateCommissionRate(event: Event) {
   const target = event.target as HTMLInputElement
@@ -1150,17 +1180,81 @@ function computePosition(stock: Stock): PositionData | null {
     const realizedPnl = totalSellQty > 0 ? (avgSellPrice - avgBuyPrice) * totalSellQty - totalSellFee - (totalBuyFee * totalSellQty / totalBuyQty) : 0
     const realizedPnlRate = avgBuyPrice > 0 && totalSellQty > 0 ? realizedPnl / (avgBuyPrice * totalSellQty) : 0
     return { stock, netQty, totalBuyQty, totalSellQty, avgBuyPrice, avgSellPrice, avgCost, totalCost, pnl, pnlRate, realizedPnl, realizedPnlRate, totalFee: totalSellFee + (totalBuyFee * totalSellQty / totalBuyQty) }
-  } else if (totalBuyQty > 0) {
-    // 已平仓
-    // 已实现盈亏 = (卖出均价 - 买入均价) × 卖出数量 - 总手续费
-    const realizedPnl = (avgSellPrice - avgBuyPrice) * totalSellQty - totalFee
-    const realizedPnlRate = avgBuyPrice > 0 ? realizedPnl / (avgBuyPrice * totalBuyQty) : 0
-    return {
-      stock, netQty: 0, totalBuyQty, totalSellQty, avgBuyPrice, avgSellPrice,
-      avgCost: 0, totalCost: 0, pnl: 0, pnlRate: 0, realizedPnl, realizedPnlRate, totalFee
-    }
   }
   return null
+}
+
+// 计算已平仓的单独交易记录（FIFO配对，不合并相同标的）
+function computeClosedPositions(stock: Stock): PositionData[] {
+  if (!stock.trades || stock.trades.length === 0) return []
+
+  // 按日期排序
+  const sortedTrades = [...stock.trades].sort((a, b) => a.date.localeCompare(b.date))
+
+  // FIFO配对：买入队列
+  const buyQueue: { trade: TradeRecord; remainingQty: number; fee: number }[] = []
+  const closedList: PositionData[] = []
+
+  for (const t of sortedTrades) {
+    const amount = t.price * t.quantity
+    if (t.direction === 'buy') {
+      const buyFee = Math.max(amount * commissionRate.value, minCommission.value)
+      buyQueue.push({ trade: t, remainingQty: t.quantity, fee: buyFee })
+    } else {
+      // 卖出：FIFO匹配买入
+      let sellQty = t.quantity
+      const sellAmount = amount
+      const sellFee = Math.max(amount * commissionRate.value, minCommission.value) + amount * stampDutyRate.value
+
+      let matchedBuyAmount = 0
+      let matchedBuyQty = 0
+      let matchedBuyFee = 0
+
+      while (sellQty > 0 && buyQueue.length > 0) {
+        const buyItem = buyQueue[0]
+        const matchQty = Math.min(sellQty, buyItem.remainingQty)
+        const matchAmount = buyItem.trade.price * matchQty
+        const matchFee = buyItem.fee * matchQty / buyItem.trade.quantity
+
+        matchedBuyAmount += matchAmount
+        matchedBuyQty += matchQty
+        matchedBuyFee += matchFee
+
+        buyItem.remainingQty -= matchQty
+        sellQty -= matchQty
+
+        if (buyItem.remainingQty === 0) {
+          buyQueue.shift()
+        }
+      }
+
+      if (matchedBuyQty > 0) {
+        const avgBuyPrice = matchedBuyAmount / matchedBuyQty
+        const avgSellPrice = sellAmount / t.quantity
+        const totalFee = matchedBuyFee + sellFee
+        const realizedPnl = (avgSellPrice - avgBuyPrice) * matchedBuyQty - totalFee
+        const realizedPnlRate = avgBuyPrice > 0 ? realizedPnl / (avgBuyPrice * matchedBuyQty) : 0
+
+        closedList.push({
+          stock,
+          netQty: 0,
+          totalBuyQty: matchedBuyQty,
+          totalSellQty: matchedBuyQty,
+          avgBuyPrice,
+          avgSellPrice,
+          avgCost: 0,
+          totalCost: 0,
+          pnl: 0,
+          pnlRate: 0,
+          realizedPnl,
+          realizedPnlRate,
+          totalFee
+        })
+      }
+    }
+  }
+
+  return closedList
 }
 
 const allPositions = computed(() => {
@@ -1171,8 +1265,8 @@ const allPositions = computed(() => {
 
 const positions = computed(() => allPositions.value.filter(p => p.netQty > 0))
 const closedPositions = computed(() => {
-  return allPositions.value
-    .filter(p => p.netQty === 0 && p.totalBuyQty > 0)
+  return stockStore.stocks
+    .flatMap(s => computeClosedPositions(s))
     .sort((a, b) => {
       // 按最后交易日期降序（最近的在前）
       const aLastDate = a.stock.trades?.length > 0
@@ -1970,6 +2064,21 @@ function updateCloseNote(stockId: string, event: Event) {
 
 .commission-row:last-child {
   margin-bottom: 0;
+}
+
+.btn-save-fees {
+  padding: 4px 16px;
+  background: var(--color-blue, #58a6ff);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn-save-fees:hover {
+  opacity: 0.85;
 }
 
 .commission-label {
