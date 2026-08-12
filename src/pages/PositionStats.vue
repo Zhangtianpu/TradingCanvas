@@ -1133,6 +1133,9 @@ interface PositionData {
   realizedPnl: number
   realizedPnlRate: number
   totalFee: number  // 总手续费
+  buyDate?: string   // 买入日期（已平仓单独记录时使用）
+  closeDate?: string // 平仓日期（已平仓单独记录时使用）
+  modeId?: string    // 交易模式（已平仓单独记录时使用）
 }
 
 function computePosition(stock: Stock): PositionData | null {
@@ -1209,12 +1212,19 @@ function computeClosedPositions(stock: Stock): PositionData[] {
       let matchedBuyAmount = 0
       let matchedBuyQty = 0
       let matchedBuyFee = 0
+      let firstBuyDate = ''  // 记录最早买入日期
+      let firstBuyModeId = '' // 记录买入交易模式
 
       while (sellQty > 0 && buyQueue.length > 0) {
         const buyItem = buyQueue[0]
         const matchQty = Math.min(sellQty, buyItem.remainingQty)
         const matchAmount = buyItem.trade.price * matchQty
         const matchFee = buyItem.fee * matchQty / buyItem.trade.quantity
+
+        if (firstBuyDate === '') {
+          firstBuyDate = buyItem.trade.date
+          firstBuyModeId = buyItem.trade.modeId
+        }
 
         matchedBuyAmount += matchAmount
         matchedBuyQty += matchQty
@@ -1248,7 +1258,10 @@ function computeClosedPositions(stock: Stock): PositionData[] {
           pnlRate: 0,
           realizedPnl,
           realizedPnlRate,
-          totalFee
+          totalFee,
+          buyDate: firstBuyDate,
+          closeDate: t.date,
+          modeId: firstBuyModeId
         })
       }
     }
@@ -1268,14 +1281,10 @@ const closedPositions = computed(() => {
   return stockStore.stocks
     .flatMap(s => computeClosedPositions(s))
     .sort((a, b) => {
-      // 按最后交易日期降序（最近的在前）
-      const aLastDate = a.stock.trades?.length > 0
-        ? a.stock.trades.map(t => t.date).sort().reverse()[0]
-        : ''
-      const bLastDate = b.stock.trades?.length > 0
-        ? b.stock.trades.map(t => t.date).sort().reverse()[0]
-        : ''
-      return bLastDate.localeCompare(aLastDate)
+      // 按平仓日期降序（最近的在前）
+      const aDate = a.closeDate || ''
+      const bDate = b.closeDate || ''
+      return bDate.localeCompare(aDate)
     })
 })
 
@@ -1315,6 +1324,8 @@ const filteredClosedPositions = computed(() => {
   // 模式筛选
   if (closedModeFilter.value) {
     result = result.filter(p => {
+      // 优先使用单独记录的 modeId
+      if (p.modeId) return p.modeId === closedModeFilter.value
       const buyTrades = p.stock.trades.filter(t => t.direction === 'buy')
       return buyTrades.some(t => t.modeId === closedModeFilter.value)
     })
@@ -1334,6 +1345,8 @@ function getPositionMode(p: PositionData): string | undefined {
 
 // 获取最后交易日期（格式化为 YYYY-MM-DD）
 function getLastTradeDate(p: PositionData): string {
+  // 已平仓单独记录时优先使用 closeDate
+  if (p.closeDate) return p.closeDate
   if (!p.stock.trades || p.stock.trades.length === 0) return ''
   return p.stock.trades.map(t => t.date).sort().reverse()[0] || ''
 }
@@ -1402,10 +1415,11 @@ const modeStats = computed<ModeStat[]>(() => {
   const stats = new Map<string, ModeStat>()
 
   for (const p of closedPositions.value) {
-    // 从买入记录中获取模式
-    const stock = p.stock
-    const buyTrades = stock.trades.filter(t => t.direction === 'buy')
-    const modeId = buyTrades[0]?.modeId || ''
+    // 优先使用单独记录的 modeId
+    const modeId = p.modeId || (() => {
+      const buyTrades = p.stock.trades.filter(t => t.direction === 'buy')
+      return buyTrades[0]?.modeId || ''
+    })()
     if (!stats.has(modeId)) {
       const mode = tradeModeStore.getMode(modeId)
       stats.set(modeId, {

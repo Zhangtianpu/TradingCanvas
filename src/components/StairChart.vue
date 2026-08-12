@@ -1538,6 +1538,9 @@ function deleteEdit() {
   border-radius: 8px;
   width: 300px;
   max-width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .edit-header {
@@ -1562,6 +1565,8 @@ function deleteEdit() {
 
 .edit-body {
   padding: 16px;
+  overflow-y: auto;
+  flex: 1;
 }
 
 .edit-row {
