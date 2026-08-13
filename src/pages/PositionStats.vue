@@ -181,11 +181,13 @@
         <p class="hint">在个股详情页添加买卖记录后会自动统计</p>
       </div>
       <div v-else class="position-list">
-        <div v-for="p in positions" :key="p.stock.id" class="card position-card">
+        <div v-for="p in positions" :key="p.stock.id + '-' + p.buyDate" class="card position-card">
           <div class="pos-header">
             <span class="pos-name" @click="$router.push(`/stocks/${p.stock.id}`)">{{ p.stock.name }}</span>
             <span class="pos-code">{{ p.stock.code }}</span>
             <span class="pos-theme">{{ getThemeName(p.stock.themeId) }}</span>
+            <span class="pos-mode">{{ getModeName(p.modeId) }}</span>
+            <span class="pos-date">{{ p.buyDate }}</span>
           </div>
           <div class="pos-grid">
             <div class="pos-item">
@@ -230,12 +232,12 @@
         <p>暂无已平仓记录</p>
       </div>
       <div v-else class="position-list">
-        <div v-for="p in filteredClosedPositions" :key="p.stock.id" class="card position-card">
+        <div v-for="p in filteredClosedPositions" :key="p.stock.id + '-' + p.buyDate + '-' + p.closeDate" class="card position-card">
           <div class="pos-header">
             <span class="pos-name" @click="$router.push(`/stocks/${p.stock.id}`)">{{ p.stock.name }}</span>
             <span class="pos-code">{{ p.stock.code }}</span>
             <span class="pos-theme">{{ getThemeName(p.stock.themeId) }}</span>
-            <span class="pos-mode">{{ getModeName(getPositionMode(p)) }}</span>
+            <span class="pos-mode">{{ getModeName(p.modeId) }}</span>
           </div>
           <div class="pos-grid">
             <div class="pos-item">
@@ -1138,6 +1140,69 @@ interface PositionData {
   modeId?: string    // 交易模式（已平仓单独记录时使用）
 }
 
+// 计算当前持仓的单独交易记录（FIFO配对后剩余的买入）
+function computeActivePositions(stock: Stock): PositionData[] {
+  if (!stock.trades || stock.trades.length === 0) return []
+
+  // 按日期排序
+  const sortedTrades = [...stock.trades].sort((a, b) => a.date.localeCompare(b.date))
+
+  // FIFO配对：买入队列
+  const buyQueue: { trade: TradeRecord; remainingQty: number; fee: number }[] = []
+
+  for (const t of sortedTrades) {
+    const amount = t.price * t.quantity
+    if (t.direction === 'buy') {
+      const buyFee = Math.max(amount * commissionRate.value, minCommission.value)
+      buyQueue.push({ trade: t, remainingQty: t.quantity, fee: buyFee })
+    } else {
+      // 卖出：FIFO匹配买入
+      let sellQty = t.quantity
+      while (sellQty > 0 && buyQueue.length > 0) {
+        const buyItem = buyQueue[0]
+        const matchQty = Math.min(sellQty, buyItem.remainingQty)
+        buyItem.remainingQty -= matchQty
+        sellQty -= matchQty
+        if (buyItem.remainingQty === 0) {
+          buyQueue.shift()
+        }
+      }
+    }
+  }
+
+  // 剩余的买入队列就是当前持仓
+  const activeList: PositionData[] = []
+  for (const buyItem of buyQueue) {
+    if (buyItem.remainingQty > 0) {
+      const avgCost = buyItem.trade.price
+      const totalCost = avgCost * buyItem.remainingQty
+      const currentPrice = stock.currentPrice || 0
+      const pnl = currentPrice > 0 ? (currentPrice - avgCost) * buyItem.remainingQty : 0
+      const pnlRate = avgCost > 0 && currentPrice > 0 ? (currentPrice - avgCost) / avgCost : 0
+
+      activeList.push({
+        stock,
+        netQty: buyItem.remainingQty,
+        totalBuyQty: buyItem.remainingQty,
+        totalSellQty: 0,
+        avgBuyPrice: avgCost,
+        avgSellPrice: 0,
+        avgCost,
+        totalCost,
+        pnl,
+        pnlRate,
+        realizedPnl: 0,
+        realizedPnlRate: 0,
+        totalFee: buyItem.fee * buyItem.remainingQty / buyItem.trade.quantity,
+        buyDate: buyItem.trade.date,
+        modeId: buyItem.trade.modeId
+      })
+    }
+  }
+
+  return activeList
+}
+
 function computePosition(stock: Stock): PositionData | null {
   if (!stock.trades || stock.trades.length === 0) return null
 
@@ -1272,11 +1337,10 @@ function computeClosedPositions(stock: Stock): PositionData[] {
 
 const allPositions = computed(() => {
   return stockStore.stocks
-    .map(s => computePosition(s))
-    .filter((p): p is PositionData => p !== null)
+    .flatMap(s => computeActivePositions(s))
 })
 
-const positions = computed(() => allPositions.value.filter(p => p.netQty > 0))
+const positions = computed(() => allPositions.value)
 const closedPositions = computed(() => {
   return stockStore.stocks
     .flatMap(s => computeClosedPositions(s))
@@ -1896,6 +1960,11 @@ function updateCloseNote(stockId: string, event: Event) {
   background: rgba(88, 166, 255, 0.15);
   color: var(--color-blue);
   border-radius: 3px;
+}
+
+.pos-date {
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 
 .tab-btn {
