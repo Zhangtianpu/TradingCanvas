@@ -191,7 +191,8 @@ export interface CycleSummary {
   name: string                 // 周期名称，如"周期1"
   startDate: string            // 周期开始日期
   endDate: string              // 周期结束日期
-  description: string           // 周期说明
+  description: string           // 周期说明（创建时的简短说明）
+  summary: string              // 周期总结（用户录入的对该周期的总结文字）
   // 周期内情绪阶段快照（锁定保存时的状态）
   cyclePhaseSnapshot: CyclePhaseHistory[]
   // 周期内交易风格快照

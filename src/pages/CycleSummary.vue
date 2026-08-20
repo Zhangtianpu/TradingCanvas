@@ -43,7 +43,8 @@
             <div class="phase-progression empty" v-else>
               <span class="no-phase">无情绪阶段记录</span>
             </div>
-            <div class="cycle-desc" v-if="cycle.description">{{ cycle.description }}</div>
+            <div class="cycle-summary-text" v-if="cycle.summary">{{ cycle.summary }}</div>
+            <div class="cycle-desc" v-else-if="cycle.description">{{ cycle.description }}</div>
           </div>
           <div class="card-footer">
             <span class="footer-stat">情绪数据：{{ getCycleEmotionCount(cycle) }} 天</span>
@@ -56,6 +57,32 @@
 
     <!-- 周期详情视图 -->
     <div v-else class="cycle-detail-view">
+      <!-- 周期总结（用户输入对该周期的总结） -->
+      <div class="detail-section summary-section">
+        <div class="section-header">
+          <div class="section-title">周期总结</div>
+          <button v-if="!editingSummary" class="btn-edit-summary" @click="startEditSummary">编辑总结</button>
+        </div>
+        <div v-if="!editingSummary" class="summary-content">
+          <div v-if="currentCycle.summary" class="summary-text">{{ currentCycle.summary }}</div>
+          <div v-else class="summary-empty">
+            <span class="empty-hint">暂无周期总结，点击"编辑总结"添加对该周期的总结</span>
+          </div>
+        </div>
+        <div v-else class="summary-editor">
+          <textarea
+            v-model="summaryForm"
+            rows="6"
+            class="summary-textarea"
+            placeholder="请输入对该周期的总结，例如：本周期主线题材、龙头表现、情绪节奏、关键事件、操作得失等..."
+          ></textarea>
+          <div class="summary-editor-actions">
+            <button class="btn-cancel" @click="cancelEditSummary">取消</button>
+            <button class="btn-save" @click="saveSummary">保存总结</button>
+          </div>
+        </div>
+      </div>
+
       <!-- 周期概要 -->
       <div class="cycle-overview">
         <div class="overview-row">
@@ -319,6 +346,28 @@ const toast = useToast()
 
 // 删除确认弹窗状态
 const showDeleteConfirm = ref(false)
+
+// ===== 周期总结编辑 =====
+const editingSummary = ref(false)
+const summaryForm = ref('')
+
+function startEditSummary() {
+  if (!currentCycle.value) return
+  summaryForm.value = currentCycle.value.summary || ''
+  editingSummary.value = true
+}
+
+function cancelEditSummary() {
+  editingSummary.value = false
+  summaryForm.value = ''
+}
+
+function saveSummary() {
+  if (!currentCycle.value) return
+  cycleSummaryStore.updateCycle(currentCycle.value.id, { summary: summaryForm.value })
+  toast.success('周期总结已保存')
+  editingSummary.value = false
+}
 
 // 当前选中的周期
 const currentCycle = computed<CycleSummaryType | null>(() => {
@@ -1363,6 +1412,125 @@ async function handleDelete() {
   border-radius: 8px;
   text-align: center;
   margin-top: 8px;
+}
+
+/* 周期总结编辑模块 */
+.summary-section {
+  border-left: 3px solid var(--color-blue);
+}
+
+.btn-edit-summary {
+  padding: 4px 12px;
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.15s;
+}
+
+.btn-edit-summary:hover {
+  border-color: var(--color-blue);
+  color: var(--color-blue);
+  background: rgba(88,166,255,0.08);
+}
+
+.summary-content {
+  min-height: 40px;
+  display: flex;
+  align-items: flex-start;
+}
+
+.summary-text {
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.summary-empty .empty-hint {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.summary-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.summary-textarea {
+  width: 100%;
+  min-height: 140px;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  resize: vertical;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.summary-textarea:focus {
+  outline: none;
+  border-color: var(--color-blue);
+}
+
+.summary-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.btn-cancel, .btn-save {
+  padding: 5px 14px;
+  font-size: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid var(--border-color);
+}
+
+.btn-cancel {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.btn-cancel:hover {
+  background: var(--bg-tertiary);
+}
+
+.btn-save {
+  background: var(--color-blue);
+  border-color: var(--color-blue);
+  color: #fff;
+}
+
+.btn-save:hover {
+  filter: brightness(1.1);
+}
+
+/* 列表卡片中的周期总结 */
+.cycle-summary-text {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  border-left: 2px solid var(--color-blue);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .btn-delete {

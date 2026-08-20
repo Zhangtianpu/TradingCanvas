@@ -44,6 +44,7 @@ export const useCycleSummaryStore = defineStore('cycleSummary', () => {
       startDate: payload.startDate,
       endDate: payload.endDate,
       description: payload.description || '',
+      summary: '',
       cyclePhaseSnapshot: payload.cyclePhaseSnapshot,
       tradeStyleSnapshot: payload.tradeStyleSnapshot,
       createdAt: now,
