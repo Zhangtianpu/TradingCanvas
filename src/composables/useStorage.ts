@@ -33,6 +33,7 @@ function createDefaultData(): AppStorage {
     tradeModes: getDefaultTradeModes(),
     tradeStyleHistory: [],
     cyclePhaseHistory: [],
+    cycleSummaries: [],
     settings: getDefaultSettings(),
     appVersion: APP_VERSION,
     lastBackupDate: ''
@@ -262,6 +263,7 @@ export function generateTestData(): AppStorage {
     tradeModes: getDefaultTradeModes(),
     tradeStyleHistory: [],
     cyclePhaseHistory: [],
+    cycleSummaries: [],
     settings: getDefaultSettings(),
     appVersion: APP_VERSION,
     lastBackupDate: ''

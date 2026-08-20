@@ -44,6 +44,16 @@ const router = createRouter({
       component: () => import('@/pages/TradeModeManage.vue')
     },
     {
+      path: '/cycle-summary',
+      name: 'cycle-summary',
+      component: () => import('@/pages/CycleSummary.vue')
+    },
+    {
+      path: '/cycle-summary/:id',
+      name: 'cycle-summary-detail',
+      component: () => import('@/pages/CycleSummary.vue')
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: () => import('@/pages/Settings.vue')

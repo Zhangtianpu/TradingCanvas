@@ -185,6 +185,21 @@ export interface CyclePhaseHistory {
   date: string              // 发生日期
 }
 
+// 周期总结（保存的周期快照）
+export interface CycleSummary {
+  id: string
+  name: string                 // 周期名称，如"周期1"
+  startDate: string            // 周期开始日期
+  endDate: string              // 周期结束日期
+  description: string           // 周期说明
+  // 周期内情绪阶段快照（锁定保存时的状态）
+  cyclePhaseSnapshot: CyclePhaseHistory[]
+  // 周期内交易风格快照
+  tradeStyleSnapshot: TradeStyleHistory[]
+  createdAt: string
+  updatedAt: string
+}
+
 // 应用存储
 export interface AppStorage {
   themes: Theme[]
@@ -194,6 +209,7 @@ export interface AppStorage {
   tradeModes: CustomTradeMode[]
   tradeStyleHistory: TradeStyleHistory[]
   cyclePhaseHistory: CyclePhaseHistory[]
+  cycleSummaries: CycleSummary[]
   settings: AppSettings
   appVersion: string
   lastBackupDate: string
