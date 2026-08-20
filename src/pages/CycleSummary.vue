@@ -48,7 +48,7 @@
           <div class="card-footer">
             <span class="footer-stat">情绪数据：{{ getCycleEmotionCount(cycle) }} 天</span>
             <span class="footer-stat">活跃题材：{{ getCycleThemeCount(cycle) }} 个</span>
-            <span class="footer-stat">交易：{{ getCycleTradeCount(cycle) }} 笔</span>
+            <span class="footer-stat">已平仓：{{ getCycleClosedCount(cycle) }} 笔</span>
           </div>
         </div>
       </div>
@@ -131,7 +131,7 @@
             <div class="section-title">宏观指数变化</div>
             <span class="range-tag">{{ cycleEmotions.length }} 个交易日</span>
           </div>
-          <div class="charts-grid">
+          <div class="charts-grid" ref="macroChartsContainer">
             <div
               v-for="chart in macroCharts"
               :key="chart.key"
@@ -139,7 +139,7 @@
             >
               <div class="chart-title">{{ chart.title }}</div>
               <div class="chart-container">
-                <canvas :ref="el => setChartRef(chart.key, el)"></canvas>
+                <canvas :data-chart-key="chart.key"></canvas>
               </div>
             </div>
           </div>
@@ -150,7 +150,7 @@
           <div class="section-header">
             <div class="section-title">市场概况变化</div>
           </div>
-          <div class="charts-grid">
+          <div class="charts-grid" ref="marketChartsContainer">
             <div
               v-for="chart in marketCharts"
               :key="chart.key"
@@ -158,62 +158,75 @@
             >
               <div class="chart-title">{{ chart.title }}</div>
               <div class="chart-container">
-                <canvas :ref="el => setChartRef(chart.key, el)"></canvas>
+                <canvas :data-chart-key="chart.key"></canvas>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- 持仓交易情况 -->
+        <!-- 已平仓记录 -->
         <div class="detail-section">
           <div class="section-header">
-            <div class="section-title">持仓交易情况</div>
-            <span class="range-tag" v-if="tradeStats">{{ tradeStats.total }} 笔交易</span>
+            <div class="section-title">已平仓记录</div>
+            <span class="range-tag" v-if="closedStats">{{ closedStats.total }} 笔</span>
           </div>
-          <div v-if="cycleTrades.length === 0" class="empty-hint small">该周期内暂无交易记录</div>
-          <div v-else class="trade-section">
-            <!-- 交易统计 -->
-            <div class="trade-stats" v-if="tradeStats">
-              <div class="stat-item buy">
-                <span class="stat-label">买入</span>
-                <span class="stat-value">{{ tradeStats.buyCount }} 笔</span>
-                <span class="stat-amount">{{ formatAmount(tradeStats.buyAmount) }}</span>
+          <div v-if="cycleClosedPositions.length === 0" class="empty-hint small">该周期内暂无已平仓记录</div>
+          <div v-else class="closed-section">
+            <!-- 平仓统计 -->
+            <div class="closed-stats" v-if="closedStats">
+              <div class="stat-item" :class="closedStats.totalRealizedPnl >= 0 ? 'profit' : 'loss'">
+                <span class="stat-label">总盈亏</span>
+                <span class="stat-value">{{ formatPnl(closedStats.totalRealizedPnl) }}</span>
+                <span class="stat-amount">含手续费 {{ formatAmount(closedStats.totalFee) }}</span>
               </div>
-              <div class="stat-item sell">
-                <span class="stat-label">卖出</span>
-                <span class="stat-value">{{ tradeStats.sellCount }} 笔</span>
-                <span class="stat-amount">{{ formatAmount(tradeStats.sellAmount) }}</span>
+              <div class="stat-item">
+                <span class="stat-label">胜率</span>
+                <span class="stat-value">{{ (closedStats.winRate * 100).toFixed(0) }}%</span>
+                <span class="stat-amount">{{ closedStats.winCount }}胜 {{ closedStats.lossCount }}负</span>
               </div>
-              <div class="stat-item total">
-                <span class="stat-label">净额</span>
-                <span class="stat-value" :class="tradeStats.sellAmount - tradeStats.buyAmount >= 0 ? 'profit' : 'loss'">
-                  {{ formatAmount(tradeStats.sellAmount - tradeStats.buyAmount) }}
-                </span>
+              <div class="stat-item">
+                <span class="stat-label">平仓笔数</span>
+                <span class="stat-value">{{ closedStats.total }} 笔</span>
               </div>
             </div>
 
-            <!-- 按个股分组的交易列表 -->
-            <div class="trade-by-stock">
-              <div v-for="group in cycleTradesByStock" :key="group.stock.id" class="trade-stock-group">
-                <div class="stock-group-header" @click="$router.push(`/stocks/${group.stock.id}`)">
-                  <span class="stock-group-name">{{ group.stock.name }}</span>
-                  <span class="stock-group-code">{{ group.stock.code }}</span>
-                  <span class="stock-group-count">{{ group.trades.length }} 笔</span>
-                </div>
-                <div class="stock-trade-list">
-                  <div v-for="t in group.trades" :key="t.id" class="trade-row">
-                    <span class="trade-date">{{ t.date.slice(5) }}</span>
-                    <span class="trade-dir" :class="t.direction">{{ t.direction === 'buy' ? '买' : '卖' }}</span>
-                    <span class="trade-price">{{ t.price.toFixed(2) }}</span>
-                    <span class="trade-qty">{{ t.quantity }}股</span>
-                    <span class="trade-amount">{{ formatAmount(t.price * t.quantity) }}</span>
-                    <span
-                      class="trade-mode-tag"
-                      :style="{ background: getModeColor(t.modeId), color: '#fff' }"
-                    >{{ getModeName(t.modeId) }}</span>
-                    <span class="trade-note" v-if="t.note">{{ t.note }}</span>
-                  </div>
-                </div>
+            <!-- 已平仓列表 -->
+            <div class="closed-list">
+              <div class="closed-header-row">
+                <span class="col-stock">股票</span>
+                <span class="col-date">买入</span>
+                <span class="col-date">平仓</span>
+                <span class="col-qty">数量</span>
+                <span class="col-price">买价</span>
+                <span class="col-price">卖价</span>
+                <span class="col-pnl">盈亏</span>
+                <span class="col-mode">模式</span>
+              </div>
+              <div
+                v-for="(p, idx) in cycleClosedPositions"
+                :key="p.stock.id + '-' + idx"
+                class="closed-row"
+                @click="$router.push(`/stocks/${p.stock.id}`)"
+              >
+                <span class="col-stock">
+                  <span class="stock-name-text">{{ p.stock.name }}</span>
+                  <span class="stock-code-text">{{ p.stock.code }}</span>
+                </span>
+                <span class="col-date">{{ p.buyDate?.slice(5) || '-' }}</span>
+                <span class="col-date">{{ p.closeDate?.slice(5) || '-' }}</span>
+                <span class="col-qty">{{ p.totalBuyQty }}</span>
+                <span class="col-price">{{ p.avgBuyPrice.toFixed(2) }}</span>
+                <span class="col-price">{{ p.avgSellPrice.toFixed(2) }}</span>
+                <span class="col-pnl" :class="p.realizedPnl >= 0 ? 'profit' : 'loss'">
+                  {{ formatPnl(p.realizedPnl) }}
+                  <span class="pnl-rate">({{ (p.realizedPnlRate * 100).toFixed(1) }}%)</span>
+                </span>
+                <span class="col-mode">
+                  <span
+                    class="trade-mode-tag"
+                    :style="{ background: getModeColor(p.modeId || ''), color: '#fff' }"
+                  >{{ getModeName(p.modeId || '') }}</span>
+                </span>
               </div>
             </div>
           </div>
@@ -257,7 +270,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Chart as ChartJS,
@@ -279,6 +292,7 @@ import { useThemeStore } from '@/stores/theme'
 import { useStockStore } from '@/stores/stock'
 import { useTradeModeStore } from '@/stores/tradeMode'
 import { useToast } from '@/composables/useToast'
+import { loadData } from '@/composables/useStorage'
 import type { CycleSummary as CycleSummaryType, CyclePhaseHistory, TradeStyleHistory, EmotionDaily, TradeRecord, Stock } from '@/types'
 import { CYCLE_PHASE_LABELS, TRADE_STYLE_LABELS, THEME_LEVEL_LABELS, THEME_STATUS_LABELS } from '@/types'
 
@@ -359,41 +373,141 @@ const cycleTrades = computed<CycleTrade[]>(() => {
   return result.sort((a, b) => a.trade.date.localeCompare(b.trade.date))
 })
 
-// 交易统计
-const tradeStats = computed(() => {
-  const trades = cycleTrades.value
-  if (trades.length === 0) return null
-  let buyCount = 0, sellCount = 0
-  let buyAmount = 0, sellAmount = 0
-  for (const { trade } of trades) {
-    const amount = trade.price * trade.quantity
-    if (trade.direction === 'buy') {
-      buyCount++
-      buyAmount += amount
+// ===== 已平仓记录（FIFO配对，closeDate 在周期内） =====
+interface PositionData {
+  stock: Stock
+  netQty: number
+  totalBuyQty: number
+  totalSellQty: number
+  avgBuyPrice: number
+  avgSellPrice: number
+  avgCost: number
+  totalCost: number
+  pnl: number
+  pnlRate: number
+  realizedPnl: number
+  realizedPnlRate: number
+  totalFee: number
+  buyDate?: string
+  closeDate?: string
+  modeId?: string
+}
+
+// 手续费设置（从存储中读取）
+const settings = loadData().settings
+const commissionRate = settings.commissionRate ?? 0.0003
+const stampDutyRate = settings.stampDutyRate ?? 0.001
+const minCommission = 5
+
+// FIFO 配对计算已平仓记录
+function computeClosedPositions(stock: Stock): PositionData[] {
+  if (!stock.trades || stock.trades.length === 0) return []
+
+  const sortedTrades = [...stock.trades].sort((a, b) => a.date.localeCompare(b.date))
+  const buyQueue: { trade: TradeRecord; remainingQty: number; fee: number }[] = []
+  const closedList: PositionData[] = []
+
+  for (const t of sortedTrades) {
+    const amount = t.price * t.quantity
+    if (t.direction === 'buy') {
+      const buyFee = Math.max(amount * commissionRate, minCommission)
+      buyQueue.push({ trade: t, remainingQty: t.quantity, fee: buyFee })
     } else {
-      sellCount++
-      sellAmount += amount
+      let sellQty = t.quantity
+      const sellAmount = amount
+      const sellFee = Math.max(amount * commissionRate, minCommission) + amount * stampDutyRate
+
+      let matchedBuyAmount = 0
+      let matchedBuyQty = 0
+      let matchedBuyFee = 0
+      let firstBuyDate = ''
+      let firstBuyModeId = ''
+
+      while (sellQty > 0 && buyQueue.length > 0) {
+        const buyItem = buyQueue[0]
+        const matchQty = Math.min(sellQty, buyItem.remainingQty)
+        const matchAmount = buyItem.trade.price * matchQty
+        const matchFee = buyItem.fee * matchQty / buyItem.trade.quantity
+
+        if (firstBuyDate === '') {
+          firstBuyDate = buyItem.trade.date
+          firstBuyModeId = buyItem.trade.modeId
+        }
+
+        matchedBuyAmount += matchAmount
+        matchedBuyQty += matchQty
+        matchedBuyFee += matchFee
+
+        buyItem.remainingQty -= matchQty
+        sellQty -= matchQty
+
+        if (buyItem.remainingQty === 0) {
+          buyQueue.shift()
+        }
+      }
+
+      if (matchedBuyQty > 0) {
+        const avgBuyPrice = matchedBuyAmount / matchedBuyQty
+        const avgSellPrice = sellAmount / t.quantity
+        const totalFee = matchedBuyFee + sellFee
+        const realizedPnl = (avgSellPrice - avgBuyPrice) * matchedBuyQty - totalFee
+        const realizedPnlRate = avgBuyPrice > 0 ? realizedPnl / (avgBuyPrice * matchedBuyQty) : 0
+
+        closedList.push({
+          stock,
+          netQty: 0,
+          totalBuyQty: matchedBuyQty,
+          totalSellQty: matchedBuyQty,
+          avgBuyPrice,
+          avgSellPrice,
+          avgCost: 0,
+          totalCost: 0,
+          pnl: 0,
+          pnlRate: 0,
+          realizedPnl,
+          realizedPnlRate,
+          totalFee,
+          buyDate: firstBuyDate,
+          closeDate: t.date,
+          modeId: firstBuyModeId
+        })
+      }
     }
   }
-  return { buyCount, sellCount, buyAmount, sellAmount, total: trades.length }
+
+  return closedList
+}
+
+// 周期内已平仓记录（closeDate 在周期时间范围内）
+const cycleClosedPositions = computed<PositionData[]>(() => {
+  if (!currentCycle.value) return []
+  const { startDate, endDate } = currentCycle.value
+  return stockStore.stocks
+    .flatMap(s => computeClosedPositions(s))
+    .filter(p => p.closeDate && p.closeDate >= startDate && p.closeDate <= endDate)
+    .sort((a, b) => {
+      const aDate = a.closeDate || ''
+      const bDate = b.closeDate || ''
+      return bDate.localeCompare(aDate) // 按平仓日期降序
+    })
 })
 
-// 按个股分组的交易记录
-const cycleTradesByStock = computed(() => {
-  const trades = cycleTrades.value
-  if (trades.length === 0) return []
-  const map = new Map<string, { stock: Stock; trades: TradeRecord[] }>()
-  for (const { stock, trade } of trades) {
-    if (!map.has(stock.id)) {
-      map.set(stock.id, { stock, trades: [] })
-    }
-    map.get(stock.id)!.trades.push(trade)
+// 已平仓统计
+const closedStats = computed(() => {
+  const positions = cycleClosedPositions.value
+  if (positions.length === 0) return null
+  let totalRealizedPnl = 0
+  let totalFee = 0
+  let winCount = 0
+  let lossCount = 0
+  for (const p of positions) {
+    totalRealizedPnl += p.realizedPnl
+    totalFee += p.totalFee
+    if (p.realizedPnl >= 0) winCount++
+    else lossCount++
   }
-  return Array.from(map.values()).sort((a, b) => {
-    const aDate = a.trades[0]?.date || ''
-    const bDate = b.trades[0]?.date || ''
-    return aDate.localeCompare(bDate)
-  })
+  const winRate = positions.length > 0 ? winCount / positions.length : 0
+  return { totalRealizedPnl, totalFee, winCount, lossCount, total: positions.length, winRate }
 })
 
 // 获取交易模式名称
@@ -416,6 +530,15 @@ function formatAmount(amount: number): string {
   return amount.toFixed(0)
 }
 
+// 格式化盈亏
+function formatPnl(pnl: number): string {
+  const sign = pnl >= 0 ? '+' : ''
+  if (Math.abs(pnl) >= 10000) {
+    return sign + (pnl / 10000).toFixed(2) + '万'
+  }
+  return sign + pnl.toFixed(0)
+}
+
 // 图表配置
 const macroCharts = [
   { key: 'sh', title: '上证指数', color: '#f85149', fill: false },
@@ -434,13 +557,12 @@ const marketCharts = [
   { key: 'height', title: '空间板高度', color: '#f0c040', fill: true }
 ]
 
-// 图表实例
-const chartRefs = ref<Record<string, HTMLCanvasElement | null>>({})
-const chartInstances = ref<Record<string, any>>({})
+// 容器 ref（通过 querySelectorAll 查找 canvas，避免函数 ref 时序问题）
+const macroChartsContainer = ref<HTMLElement | null>(null)
+const marketChartsContainer = ref<HTMLElement | null>(null)
 
-function setChartRef(key: string, el: any) {
-  if (el) chartRefs.value[key] = el
-}
+// 图表实例
+const chartInstances = ref<Record<string, any>>({})
 
 function getChartData(key: string): number[] {
   const dataMap: Record<string, (e: any) => number> = {
@@ -540,42 +662,74 @@ function destroyAllCharts() {
   })
 }
 
-function renderAllCharts(retryCount = 0): void {
+function renderAllCharts(): void {
   destroyAllCharts()
   const allConfigs = [...macroCharts, ...marketCharts]
   let renderedCount = 0
-  allConfigs.forEach(config => {
-    const canvas = chartRefs.value[config.key]
+
+  // 通过 querySelectorAll 在容器内查找 canvas（避免函数 ref 时序问题）
+  const containers = [macroChartsContainer.value, marketChartsContainer.value]
+  const canvasMap = new Map<string, HTMLCanvasElement>()
+  for (const container of containers) {
+    if (!container) continue
+    const canvases = container.querySelectorAll('canvas[data-chart-key]')
+    canvases.forEach(canvas => {
+      const key = canvas.getAttribute('data-chart-key')
+      if (key) canvasMap.set(key, canvas as HTMLCanvasElement)
+    })
+  }
+
+  for (const config of allConfigs) {
+    const canvas = canvasMap.get(config.key)
     if (canvas) {
       chartInstances.value[config.key] = createChart(canvas, config)
       renderedCount++
     }
-  })
-  // 如果有图表未渲染（canvas 还没准备好），重试
-  if (renderedCount < allConfigs.length && retryCount < 5) {
-    setTimeout(() => renderAllCharts(retryCount + 1), 200)
   }
 }
 
-// 监听当前周期变化，触发图表渲染（immediate 处理直接访问详情页的场景）
-watch(currentCycle, async () => {
-  destroyAllCharts()
-  await nextTick()
-  if (currentCycle.value && cycleEmotions.value.length > 0) {
-    setTimeout(() => renderAllCharts(), 100)
-  }
-}, { immediate: true })
+// 统一调度：等待 DOM 就绪后渲染图表
+let renderTimer: ReturnType<typeof setTimeout> | null = null
 
-// 监听情绪数据变化
-watch(() => cycleEmotions.value.length, async () => {
+function scheduleRender() {
+  if (renderTimer) clearTimeout(renderTimer)
   destroyAllCharts()
-  await nextTick()
-  if (currentCycle.value && cycleEmotions.value.length > 0) {
-    setTimeout(() => renderAllCharts(), 100)
-  }
+
+  if (!currentCycle.value || cycleEmotions.value.length === 0) return
+
+  // 多次 nextTick + 延迟，确保 Vue 条件渲染的 DOM 已挂载
+  renderTimer = setTimeout(async () => {
+    await nextTick()
+    // 再等一帧让浏览器完成布局
+    requestAnimationFrame(() => {
+      renderAllCharts()
+      // 如果首次渲染未成功，延迟再试一次
+      const total = macroCharts.length + marketCharts.length
+      const rendered = Object.values(chartInstances.value).filter(Boolean).length
+      if (rendered < total) {
+        setTimeout(() => renderAllCharts(), 300)
+      }
+    })
+  }, 200)
+}
+
+// 组件挂载后尝试渲染（处理直接访问详情页 URL 的场景）
+onMounted(() => {
+  scheduleRender()
+})
+
+// 路由参数变化时重新渲染（处理从列表跳转详情的场景）
+watch(() => route.params.id, () => {
+  scheduleRender()
+})
+
+// 情绪数据变化时重新渲染
+watch(() => cycleEmotions.value.length, () => {
+  scheduleRender()
 })
 
 onBeforeUnmount(() => {
+  if (renderTimer) clearTimeout(renderTimer)
   destroyAllCharts()
 })
 
@@ -629,13 +783,12 @@ function getCycleThemeCount(cycle: CycleSummaryType): number {
   }).length
 }
 
-function getCycleTradeCount(cycle: CycleSummaryType): number {
+function getCycleClosedCount(cycle: CycleSummaryType): number {
   let count = 0
   for (const stock of stockStore.stocks) {
     if (!stock.trades) continue
-    for (const trade of stock.trades) {
-      if (trade.date >= cycle.startDate && trade.date <= cycle.endDate) count++
-    }
+    const closed = computeClosedPositions(stock)
+    count += closed.filter(p => p.closeDate && p.closeDate >= cycle.startDate && p.closeDate <= cycle.endDate).length
   }
   return count
 }
@@ -1054,40 +1207,37 @@ async function handleDelete() {
   font-size: 11px;
 }
 
-/* 持仓交易情况 */
-.trade-section {
+/* 已平仓记录 */
+.closed-section {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.trade-stats {
+.closed-stats {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
 }
 
-.stat-item {
+.closed-stats .stat-item {
   flex: 1;
-  min-width: 120px;
+  min-width: 140px;
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding: 10px 12px;
   border-radius: 6px;
   background: var(--bg-tertiary);
+  border-left: 3px solid var(--text-tertiary);
 }
 
-.stat-item.buy {
-  border-left: 3px solid #f85149;
+.closed-stats .stat-item.profit {
+  border-left-color: #f85149;
 }
 
-.stat-item.sell {
-  border-left: 3px solid #3fb950;
-}
-
-.stat-item.total {
-  border-left: 3px solid #58a6ff;
+.closed-stats .stat-item.loss {
+  border-left-color: #3fb950;
 }
 
 .stat-label {
@@ -1114,107 +1264,88 @@ async function handleDelete() {
   color: var(--text-secondary);
 }
 
-.trade-by-stock {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.trade-stock-group {
+.closed-list {
   border: 1px solid var(--border-color);
   border-radius: 6px;
   overflow: hidden;
 }
 
-.stock-group-header {
-  display: flex;
+.closed-header-row,
+.closed-row {
+  display: grid;
+  grid-template-columns: 1.4fr 0.7fr 0.7fr 0.6fr 0.7fr 0.7fr 1fr 0.8fr;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+}
+
+.closed-header-row {
   background: var(--bg-tertiary);
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.closed-row {
+  border-top: 1px solid var(--border-color);
   cursor: pointer;
   transition: background 0.15s;
 }
 
-.stock-group-header:hover {
-  background: rgba(88,166,255,0.1);
+.closed-row:hover {
+  background: var(--bg-tertiary);
 }
 
-.stock-group-name {
-  font-size: 13px;
-  font-weight: 600;
+.col-stock {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.stock-name-text {
+  font-weight: 500;
   color: var(--text-primary);
 }
 
-.stock-group-code {
-  font-size: 11px;
+.stock-code-text {
+  font-size: 10px;
   color: var(--text-tertiary);
 }
 
-.stock-group-count {
-  margin-left: auto;
+.col-date {
+  color: var(--text-secondary);
   font-size: 11px;
+}
+
+.col-qty {
   color: var(--text-secondary);
 }
 
-.stock-trade-list {
-  display: flex;
-  flex-direction: column;
+.col-price {
+  color: var(--text-primary);
 }
 
-.trade-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  border-bottom: 1px solid var(--border-color);
-  font-size: 12px;
-}
-
-.trade-row:last-child {
-  border-bottom: none;
-}
-
-.trade-date {
-  color: var(--text-secondary);
-  font-size: 11px;
-  min-width: 36px;
-}
-
-.trade-dir {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 3px;
-  font-size: 11px;
+.col-pnl {
   font-weight: 600;
-  color: #fff;
 }
 
-.trade-dir.buy {
-  background: #f85149;
+.col-pnl.profit {
+  color: #f85149;
 }
 
-.trade-dir.sell {
-  background: #3fb950;
+.col-pnl.loss {
+  color: #3fb950;
 }
 
-.trade-price {
-  color: var(--text-primary);
-  min-width: 50px;
+.pnl-rate {
+  font-size: 10px;
+  font-weight: 400;
+  opacity: 0.8;
 }
 
-.trade-qty {
-  color: var(--text-secondary);
-  min-width: 50px;
-}
-
-.trade-amount {
-  color: var(--text-primary);
-  font-weight: 500;
-  min-width: 60px;
+.col-mode {
+  display: flex;
 }
 
 .trade-mode-tag {
@@ -1222,12 +1353,7 @@ async function handleDelete() {
   padding: 1px 6px;
   border-radius: 3px;
   font-weight: 500;
-}
-
-.trade-note {
-  color: var(--text-tertiary);
-  font-size: 11px;
-  margin-left: auto;
+  white-space: nowrap;
 }
 
 /* 危险区域 */
@@ -1267,6 +1393,19 @@ async function handleDelete() {
   }
   .overview-row {
     gap: 16px;
+  }
+  .closed-header-row,
+  .closed-row {
+    grid-template-columns: 1.4fr 0.7fr 0.7fr 1fr 0.8fr;
+    font-size: 11px;
+  }
+  .closed-header-row .col-qty,
+  .closed-row .col-qty,
+  .closed-header-row .col-price,
+  .closed-row .col-price:nth-child(6),
+  .closed-header-row .col-mode,
+  .closed-row .col-mode {
+    display: none;
   }
 }
 </style>
