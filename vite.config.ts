@@ -10,6 +10,12 @@ export default defineConfig({
       '@': resolve(__dirname, 'src')
     }
   },
+  server: {
+    watch: {
+      usePolling: true,
+      interval: 1000
+    }
+  },
   build: {
     outDir: 'dist'
   }
