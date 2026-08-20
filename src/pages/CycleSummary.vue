@@ -48,6 +48,7 @@
           <div class="card-footer">
             <span class="footer-stat">情绪数据：{{ getCycleEmotionCount(cycle) }} 天</span>
             <span class="footer-stat">活跃题材：{{ getCycleThemeCount(cycle) }} 个</span>
+            <span class="footer-stat">交易：{{ getCycleTradeCount(cycle) }} 笔</span>
           </div>
         </div>
       </div>
@@ -163,6 +164,61 @@
           </div>
         </div>
 
+        <!-- 持仓交易情况 -->
+        <div class="detail-section">
+          <div class="section-header">
+            <div class="section-title">持仓交易情况</div>
+            <span class="range-tag" v-if="tradeStats">{{ tradeStats.total }} 笔交易</span>
+          </div>
+          <div v-if="cycleTrades.length === 0" class="empty-hint small">该周期内暂无交易记录</div>
+          <div v-else class="trade-section">
+            <!-- 交易统计 -->
+            <div class="trade-stats" v-if="tradeStats">
+              <div class="stat-item buy">
+                <span class="stat-label">买入</span>
+                <span class="stat-value">{{ tradeStats.buyCount }} 笔</span>
+                <span class="stat-amount">{{ formatAmount(tradeStats.buyAmount) }}</span>
+              </div>
+              <div class="stat-item sell">
+                <span class="stat-label">卖出</span>
+                <span class="stat-value">{{ tradeStats.sellCount }} 笔</span>
+                <span class="stat-amount">{{ formatAmount(tradeStats.sellAmount) }}</span>
+              </div>
+              <div class="stat-item total">
+                <span class="stat-label">净额</span>
+                <span class="stat-value" :class="tradeStats.sellAmount - tradeStats.buyAmount >= 0 ? 'profit' : 'loss'">
+                  {{ formatAmount(tradeStats.sellAmount - tradeStats.buyAmount) }}
+                </span>
+              </div>
+            </div>
+
+            <!-- 按个股分组的交易列表 -->
+            <div class="trade-by-stock">
+              <div v-for="group in cycleTradesByStock" :key="group.stock.id" class="trade-stock-group">
+                <div class="stock-group-header" @click="$router.push(`/stocks/${group.stock.id}`)">
+                  <span class="stock-group-name">{{ group.stock.name }}</span>
+                  <span class="stock-group-code">{{ group.stock.code }}</span>
+                  <span class="stock-group-count">{{ group.trades.length }} 笔</span>
+                </div>
+                <div class="stock-trade-list">
+                  <div v-for="t in group.trades" :key="t.id" class="trade-row">
+                    <span class="trade-date">{{ t.date.slice(5) }}</span>
+                    <span class="trade-dir" :class="t.direction">{{ t.direction === 'buy' ? '买' : '卖' }}</span>
+                    <span class="trade-price">{{ t.price.toFixed(2) }}</span>
+                    <span class="trade-qty">{{ t.quantity }}股</span>
+                    <span class="trade-amount">{{ formatAmount(t.price * t.quantity) }}</span>
+                    <span
+                      class="trade-mode-tag"
+                      :style="{ background: getModeColor(t.modeId), color: '#fff' }"
+                    >{{ getModeName(t.modeId) }}</span>
+                    <span class="trade-note" v-if="t.note">{{ t.note }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- 题材变化 -->
         <div class="detail-section">
           <div class="section-header">
@@ -201,7 +257,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, watch, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Chart as ChartJS,
@@ -220,8 +276,10 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { useCycleSummaryStore } from '@/stores/cycleSummary'
 import { useEmotionStore } from '@/stores/emotion'
 import { useThemeStore } from '@/stores/theme'
+import { useStockStore } from '@/stores/stock'
+import { useTradeModeStore } from '@/stores/tradeMode'
 import { useToast } from '@/composables/useToast'
-import type { CycleSummary as CycleSummaryType, CyclePhaseHistory, TradeStyleHistory, EmotionDaily } from '@/types'
+import type { CycleSummary as CycleSummaryType, CyclePhaseHistory, TradeStyleHistory, EmotionDaily, TradeRecord, Stock } from '@/types'
 import { CYCLE_PHASE_LABELS, TRADE_STYLE_LABELS, THEME_LEVEL_LABELS, THEME_STATUS_LABELS } from '@/types'
 
 ChartJS.register(
@@ -241,6 +299,8 @@ const router = useRouter()
 const cycleSummaryStore = useCycleSummaryStore()
 const emotionStore = useEmotionStore()
 const themeStore = useThemeStore()
+const stockStore = useStockStore()
+const tradeModeStore = useTradeModeStore()
 const toast = useToast()
 
 // 删除确认弹窗状态
@@ -278,6 +338,83 @@ const cycleThemes = computed(() => {
     return false
   }).sort((a, b) => a.burstDate.localeCompare(b.burstDate))
 })
+
+// 周期内的交易记录（含所属个股信息）
+interface CycleTrade {
+  stock: Stock
+  trade: TradeRecord
+}
+const cycleTrades = computed<CycleTrade[]>(() => {
+  if (!currentCycle.value) return []
+  const { startDate, endDate } = currentCycle.value
+  const result: CycleTrade[] = []
+  for (const stock of stockStore.stocks) {
+    if (!stock.trades || stock.trades.length === 0) continue
+    for (const trade of stock.trades) {
+      if (trade.date >= startDate && trade.date <= endDate) {
+        result.push({ stock, trade })
+      }
+    }
+  }
+  return result.sort((a, b) => a.trade.date.localeCompare(b.trade.date))
+})
+
+// 交易统计
+const tradeStats = computed(() => {
+  const trades = cycleTrades.value
+  if (trades.length === 0) return null
+  let buyCount = 0, sellCount = 0
+  let buyAmount = 0, sellAmount = 0
+  for (const { trade } of trades) {
+    const amount = trade.price * trade.quantity
+    if (trade.direction === 'buy') {
+      buyCount++
+      buyAmount += amount
+    } else {
+      sellCount++
+      sellAmount += amount
+    }
+  }
+  return { buyCount, sellCount, buyAmount, sellAmount, total: trades.length }
+})
+
+// 按个股分组的交易记录
+const cycleTradesByStock = computed(() => {
+  const trades = cycleTrades.value
+  if (trades.length === 0) return []
+  const map = new Map<string, { stock: Stock; trades: TradeRecord[] }>()
+  for (const { stock, trade } of trades) {
+    if (!map.has(stock.id)) {
+      map.set(stock.id, { stock, trades: [] })
+    }
+    map.get(stock.id)!.trades.push(trade)
+  }
+  return Array.from(map.values()).sort((a, b) => {
+    const aDate = a.trades[0]?.date || ''
+    const bDate = b.trades[0]?.date || ''
+    return aDate.localeCompare(bDate)
+  })
+})
+
+// 获取交易模式名称
+function getModeName(modeId: string): string {
+  const mode = tradeModeStore.getMode(modeId)
+  return mode?.name || '未分类'
+}
+
+// 获取交易模式颜色
+function getModeColor(modeId: string): string {
+  const mode = tradeModeStore.getMode(modeId)
+  return mode?.color || '#8b949e'
+}
+
+// 格式化金额
+function formatAmount(amount: number): string {
+  if (amount >= 10000) {
+    return (amount / 10000).toFixed(2) + '万'
+  }
+  return amount.toFixed(0)
+}
 
 // 图表配置
 const macroCharts = [
@@ -403,16 +540,44 @@ function destroyAllCharts() {
   })
 }
 
-function renderAllCharts() {
+function renderAllCharts(retryCount = 0): void {
   destroyAllCharts()
   const allConfigs = [...macroCharts, ...marketCharts]
+  let renderedCount = 0
   allConfigs.forEach(config => {
     const canvas = chartRefs.value[config.key]
     if (canvas) {
       chartInstances.value[config.key] = createChart(canvas, config)
+      renderedCount++
     }
   })
+  // 如果有图表未渲染（canvas 还没准备好），重试
+  if (renderedCount < allConfigs.length && retryCount < 5) {
+    setTimeout(() => renderAllCharts(retryCount + 1), 200)
+  }
 }
+
+// 监听当前周期变化，触发图表渲染（immediate 处理直接访问详情页的场景）
+watch(currentCycle, async () => {
+  destroyAllCharts()
+  await nextTick()
+  if (currentCycle.value && cycleEmotions.value.length > 0) {
+    setTimeout(() => renderAllCharts(), 100)
+  }
+}, { immediate: true })
+
+// 监听情绪数据变化
+watch(() => cycleEmotions.value.length, async () => {
+  destroyAllCharts()
+  await nextTick()
+  if (currentCycle.value && cycleEmotions.value.length > 0) {
+    setTimeout(() => renderAllCharts(), 100)
+  }
+})
+
+onBeforeUnmount(() => {
+  destroyAllCharts()
+})
 
 // 工具方法
 function getCyclePhaseLabel(phase: any) {
@@ -464,6 +629,17 @@ function getCycleThemeCount(cycle: CycleSummaryType): number {
   }).length
 }
 
+function getCycleTradeCount(cycle: CycleSummaryType): number {
+  let count = 0
+  for (const stock of stockStore.stocks) {
+    if (!stock.trades) continue
+    for (const trade of stock.trades) {
+      if (trade.date >= cycle.startDate && trade.date <= cycle.endDate) count++
+    }
+  }
+  return count
+}
+
 // 导航
 function selectCycle(id: string) {
   router.push(`/cycle-summary/${id}`)
@@ -482,34 +658,6 @@ async function handleDelete() {
   toast.success(`已删除周期「${name}」`)
   router.push('/cycle-summary')
 }
-
-// 监听路由和数据变化重新渲染图表
-watch(() => route.params.id, async () => {
-  destroyAllCharts()
-  await nextTick()
-  if (currentCycle.value && cycleEmotions.value.length > 0) {
-    setTimeout(() => renderAllCharts(), 50)
-  }
-})
-
-watch(() => cycleEmotions.value.length, async () => {
-  destroyAllCharts()
-  await nextTick()
-  if (currentCycle.value && cycleEmotions.value.length > 0) {
-    setTimeout(() => renderAllCharts(), 50)
-  }
-})
-
-onMounted(async () => {
-  await nextTick()
-  if (currentCycle.value && cycleEmotions.value.length > 0) {
-    setTimeout(() => renderAllCharts(), 50)
-  }
-})
-
-onBeforeUnmount(() => {
-  destroyAllCharts()
-})
 </script>
 
 <style scoped>
@@ -904,6 +1052,182 @@ onBeforeUnmount(() => {
 .theme-burst, .theme-end {
   color: var(--text-tertiary);
   font-size: 11px;
+}
+
+/* 持仓交易情况 */
+.trade-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.trade-stats {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.stat-item {
+  flex: 1;
+  min-width: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+}
+
+.stat-item.buy {
+  border-left: 3px solid #f85149;
+}
+
+.stat-item.sell {
+  border-left: 3px solid #3fb950;
+}
+
+.stat-item.total {
+  border-left: 3px solid #58a6ff;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.stat-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.stat-value.profit {
+  color: #f85149;
+}
+
+.stat-value.loss {
+  color: #3fb950;
+}
+
+.stat-amount {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.trade-by-stock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.trade-stock-group {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.stock-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.stock-group-header:hover {
+  background: rgba(88,166,255,0.1);
+}
+
+.stock-group-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.stock-group-code {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.stock-group-count {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.stock-trade-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.trade-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 12px;
+}
+
+.trade-row:last-child {
+  border-bottom: none;
+}
+
+.trade-date {
+  color: var(--text-secondary);
+  font-size: 11px;
+  min-width: 36px;
+}
+
+.trade-dir {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.trade-dir.buy {
+  background: #f85149;
+}
+
+.trade-dir.sell {
+  background: #3fb950;
+}
+
+.trade-price {
+  color: var(--text-primary);
+  min-width: 50px;
+}
+
+.trade-qty {
+  color: var(--text-secondary);
+  min-width: 50px;
+}
+
+.trade-amount {
+  color: var(--text-primary);
+  font-weight: 500;
+  min-width: 60px;
+}
+
+.trade-mode-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.trade-note {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  margin-left: auto;
 }
 
 /* 危险区域 */
