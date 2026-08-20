@@ -1,4 +1,4 @@
-import type { AppStorage, EmotionDaily, Theme, Stock, CustomTradeMode, AppSettings } from '@/types'
+import type { AppStorage, EmotionDaily, Theme, Stock, CustomTradeMode, CustomTradeStyle, CustomCyclePhase, AppSettings } from '@/types'
 
 const STORAGE_KEY = 'trading-canvas-data'
 const APP_VERSION = '1.0.0'
@@ -24,6 +24,22 @@ function getDefaultTradeModes(): CustomTradeMode[] {
   ]
 }
 
+function getDefaultTradeStyles(): CustomTradeStyle[] {
+  return [
+    { id: 'ts-trend', key: 'trend', name: '趋势', color: '#58a6ff', description: '趋势交易风格', isDefault: true, createdAt: new Date().toISOString() },
+    { id: 'ts-board', key: 'board', name: '连板', color: '#f0c040', description: '连板接力风格', isDefault: true, createdAt: new Date().toISOString() }
+  ]
+}
+
+function getDefaultCyclePhases(): CustomCyclePhase[] {
+  return [
+    { id: 'cp-start', key: 'start', name: '启动', color: '#3fb950', description: '情绪启动阶段', isDefault: true, createdAt: new Date().toISOString() },
+    { id: 'cp-main', key: 'main', name: '主升', color: '#f85149', description: '情绪主升阶段', isDefault: true, createdAt: new Date().toISOString() },
+    { id: 'cp-diverge', key: 'diverge', name: '分歧', color: '#a371f7', description: '情绪分歧阶段', isDefault: true, createdAt: new Date().toISOString() },
+    { id: 'cp-retreat', key: 'retreat', name: '退潮', color: '#8b949e', description: '情绪退潮阶段', isDefault: true, createdAt: new Date().toISOString() }
+  ]
+}
+
 function createDefaultData(): AppStorage {
   return {
     themes: [],
@@ -31,6 +47,8 @@ function createDefaultData(): AppStorage {
     emotions: [],
     reviews: [],
     tradeModes: getDefaultTradeModes(),
+    customTradeStyles: getDefaultTradeStyles(),
+    customCyclePhases: getDefaultCyclePhases(),
     tradeStyleHistory: [],
     cyclePhaseHistory: [],
     cycleSummaries: [],
@@ -261,6 +279,8 @@ export function generateTestData(): AppStorage {
     emotions,
     reviews: [],
     tradeModes: getDefaultTradeModes(),
+    customTradeStyles: getDefaultTradeStyles(),
+    customCyclePhases: getDefaultCyclePhases(),
     tradeStyleHistory: [],
     cyclePhaseHistory: [],
     cycleSummaries: [],
@@ -274,11 +294,14 @@ export function loadData(): AppStorage {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return createDefaultData()
-    const data = JSON.parse(raw) as AppStorage
-    // 兼容性处理：确保所有字段存在
+    const data = JSON.parse(raw) as Partial<AppStorage>
+    // 兼容性处理：确保所有字段存在，缺失字段使用默认值
+    const defaults = createDefaultData()
     return {
-      ...createDefaultData(),
+      ...defaults,
       ...data,
+      customTradeStyles: data.customTradeStyles ?? defaults.customTradeStyles,
+      customCyclePhases: data.customCyclePhases ?? defaults.customCyclePhases,
       appVersion: APP_VERSION
     }
   } catch {

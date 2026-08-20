@@ -8,7 +8,7 @@
       </div>
       <div class="current-style" v-if="cycleStore.currentTradeStyle">
         <span class="style-label">当前：</span>
-        <span class="style-tag" :class="`style-${cycleStore.currentTradeStyle.style}`">
+        <span class="style-tag" :style="{ background: getTradeStyleColor(cycleStore.currentTradeStyle.style) }">
           {{ getTradeStyleLabel(cycleStore.currentTradeStyle.style) }}
         </span>
         <span class="style-since">{{ cycleStore.currentTradeStyle.date.slice(5) }}起</span>
@@ -21,8 +21,8 @@
       <!-- 交易风格历史 -->
       <div class="history-track" v-if="cycleStore.sortedTradeStyleHistory.length > 0">
         <template v-for="(h, idx) in cycleStore.sortedTradeStyleHistory" :key="h.id">
-          <div class="history-item editable" :class="`style-${h.style}`" @click="openEditTradeStyle(h)">
-            <span class="hi-dot"></span>
+          <div class="history-item editable" :style="{ '--item-color': getTradeStyleColor(h.style) }" @click="openEditTradeStyle(h)">
+            <span class="hi-dot" :style="{ background: getTradeStyleColor(h.style) }"></span>
             <span class="hi-label">{{ getTradeStyleLabel(h.style) }}</span>
             <span class="hi-date">{{ h.date.slice(5) }}</span>
             <span class="hi-duration">{{ getTradeStyleItemDuration(idx) }}</span>
@@ -43,7 +43,7 @@
       </div>
       <div class="current-style" v-if="cycleStore.currentCyclePhase">
         <span class="style-label">当前：</span>
-        <span class="style-tag" :class="`phase-${cycleStore.currentCyclePhase.phase}`">
+        <span class="style-tag" :style="{ background: getCyclePhaseColor(cycleStore.currentCyclePhase.phase) }">
           {{ getCyclePhaseLabel(cycleStore.currentCyclePhase.phase) }}
         </span>
         <span class="style-since">{{ cycleStore.currentCyclePhase.date.slice(5) }}起</span>
@@ -56,8 +56,8 @@
       <!-- 情绪周期历史 -->
       <div class="history-track" v-if="cycleStore.sortedCyclePhaseHistory.length > 0">
         <template v-for="(h, idx) in cycleStore.sortedCyclePhaseHistory" :key="h.id">
-          <div class="history-item editable" :class="`phase-${h.phase}`" @click="openEditCyclePhase(h)">
-            <span class="hi-dot"></span>
+          <div class="history-item editable" :style="{ '--item-color': getCyclePhaseColor(h.phase) }" @click="openEditCyclePhase(h)">
+            <span class="hi-dot" :style="{ background: getCyclePhaseColor(h.phase) }"></span>
             <span class="hi-label">{{ getCyclePhaseLabel(h.phase) }}</span>
             <span class="hi-date">{{ h.date.slice(5) }}</span>
             <span class="hi-duration">{{ getCyclePhaseItemDuration(idx) }}</span>
@@ -124,7 +124,7 @@
             <div class="preview-title">周期内情绪阶段（将一同保存）</div>
             <div class="preview-track">
               <template v-for="(p, idx) in cyclePhasePreview" :key="p.id">
-                <span class="preview-item" :class="`phase-${p.phase}`">
+                <span class="preview-item" :style="{ background: getCyclePhaseColor(p.phase) }">
                   {{ getCyclePhaseLabel(p.phase) }}
                   <span class="preview-date">{{ p.date.slice(5) }}</span>
                 </span>
@@ -147,33 +147,50 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCycleStore } from '@/stores/cycle'
 import { useCycleSummaryStore } from '@/stores/cycleSummary'
+import { useCustomTradeStyleStore } from '@/stores/customTradeStyle'
+import { useCustomCyclePhaseStore } from '@/stores/customCyclePhase'
 import { useToast } from '@/composables/useToast'
 import type { TradeStyle, CyclePhase, TradeStyleHistory, CyclePhaseHistory } from '@/types'
-import { TRADE_STYLE_LABELS, CYCLE_PHASE_LABELS } from '@/types'
 
 const router = useRouter()
 const cycleStore = useCycleStore()
 const cycleSummaryStore = useCycleSummaryStore()
+const customTradeStyleStore = useCustomTradeStyleStore()
+const customCyclePhaseStore = useCustomCyclePhaseStore()
 const toast = useToast()
 
-const tradeStyleOptions = [
-  { value: 'trend' as TradeStyle, label: '趋势' },
-  { value: 'board' as TradeStyle, label: '连板' }
-]
+// 从 store 动态读取交易风格选项
+const tradeStyleOptions = computed(() => {
+  return customTradeStyleStore.options.map(o => ({
+    value: o.value as TradeStyle,
+    label: o.label
+  }))
+})
 
-const cyclePhaseOptions = [
-  { value: 'start' as CyclePhase, label: '启动' },
-  { value: 'main' as CyclePhase, label: '主升' },
-  { value: 'diverge' as CyclePhase, label: '分歧' },
-  { value: 'retreat' as CyclePhase, label: '退潮' }
-]
+// 从 store 动态读取情绪阶段选项
+const cyclePhaseOptions = computed(() => {
+  return customCyclePhaseStore.options.map(o => ({
+    value: o.value as CyclePhase,
+    label: o.label
+  }))
+})
 
-function getTradeStyleLabel(style: TradeStyle) {
-  return TRADE_STYLE_LABELS[style]
+// 根据 key 获取显示名称（从自定义 store 读取）
+function getTradeStyleLabel(style: string) {
+  return customTradeStyleStore.getLabelByKey(style)
 }
 
-function getCyclePhaseLabel(phase: CyclePhase) {
-  return CYCLE_PHASE_LABELS[phase]
+function getCyclePhaseLabel(phase: string) {
+  return customCyclePhaseStore.getLabelByKey(phase)
+}
+
+// 根据 key 获取颜色（用于渲染）
+function getTradeStyleColor(style: string) {
+  return customTradeStyleStore.getColorByKey(style)
+}
+
+function getCyclePhaseColor(phase: string) {
+  return customCyclePhaseStore.getColorByKey(phase)
 }
 
 // 计算交易日数量（排除周末）
@@ -510,14 +527,6 @@ function handleSaveCycle() {
   color: #fff;
 }
 
-.style-trend { background: #58a6ff; }
-.style-board { background: #f0c040; color: #1f2328; }
-
-.phase-start { background: #3fb950; }
-.phase-main { background: #f85149; }
-.phase-diverge { background: #a371f7; }
-.phase-retreat { background: #8b949e; }
-
 .style-since {
   color: var(--text-tertiary);
   font-size: 11px;
@@ -592,20 +601,16 @@ function handleSaveCycle() {
   font-size: 11px;
 }
 
-/* 历史项颜色 */
-.history-item.style-trend { background: rgba(88,166,255,0.12); }
-.history-item.style-trend .hi-dot { background: #58a6ff; }
-.history-item.style-board { background: rgba(240,192,64,0.12); }
-.history-item.style-board .hi-dot { background: #f0c040; }
-
-.history-item.phase-start { background: rgba(63,185,80,0.12); }
-.history-item.phase-start .hi-dot { background: #3fb950; }
-.history-item.phase-main { background: rgba(248,81,73,0.12); }
-.history-item.phase-main .hi-dot { background: #f85149; }
-.history-item.phase-diverge { background: rgba(163,113,247,0.12); }
-.history-item.phase-diverge .hi-dot { background: #a371f7; }
-.history-item.phase-retreat { background: rgba(139,148,158,0.12); }
-.history-item.phase-retreat .hi-dot { background: #8b949e; }
+/* 历史项背景色（基于 --item-color 变量，用淡色叠加） */
+.history-item {
+  background: color-mix(in srgb, var(--item-color, #58a6ff) 15%, transparent);
+}
+/* 兼容不支持 color-mix 的浏览器：使用半透明覆盖 */
+@supports not (background: color-mix(in srgb, red 15%, transparent)) {
+  .history-item {
+    background: rgba(88, 166, 255, 0.12);
+  }
+}
 
 /* 弹窗 */
 .edit-modal {
@@ -783,23 +788,6 @@ function handleSaveCycle() {
 .preview-arrow {
   color: var(--text-tertiary);
   font-size: 11px;
-}
-
-.preview-item.phase-start {
-  background: rgba(63,185,80,0.15);
-  color: #3fb950;
-}
-.preview-item.phase-main {
-  background: rgba(248,81,73,0.15);
-  color: #f85149;
-}
-.preview-item.phase-diverge {
-  background: rgba(163,113,247,0.15);
-  color: #a371f7;
-}
-.preview-item.phase-retreat {
-  background: rgba(139,148,158,0.15);
-  color: #8b949e;
 }
 
 textarea.date-input {

@@ -168,15 +168,37 @@ export interface DailyReview {
 // 交易风格
 export type TradeStyle = 'trend' | 'board'  // 趋势 | 连板
 
+// 自定义交易风格（用户可创建新的风格）
+export interface CustomTradeStyle {
+  id: string
+  key: string              // 唯一标识，如 'trend'、'custom_xxx'
+  name: string             // 显示名称，如"趋势"
+  color: string            // 颜色
+  description?: string    // 说明
+  isDefault?: boolean      // 是否为默认项（不可删除）
+  createdAt: string
+}
+
 // 交易风格历史记录
 export interface TradeStyleHistory {
   id: string
-  style: TradeStyle
+  style: string             // 风格 key（对应 CustomTradeStyle.key 或默认项）
   date: string              // 发生日期
 }
 
 // 情绪周期阶段
 export type CyclePhase = 'start' | 'main' | 'diverge' | 'retreat'  // 启动 | 主升 | 分歧 | 退潮
+
+// 自定义情绪阶段（用户可创建新的阶段）
+export interface CustomCyclePhase {
+  id: string
+  key: string              // 唯一标识，如 'start'、'custom_xxx'
+  name: string             // 显示名称，如"启动"
+  color: string            // 颜色
+  description?: string    // 说明
+  isDefault?: boolean      // 是否为默认项（不可删除）
+  createdAt: string
+}
 
 // 情绪周期历史记录
 export interface CyclePhaseHistory {
@@ -208,6 +230,8 @@ export interface AppStorage {
   emotions: EmotionDaily[]
   reviews: DailyReview[]
   tradeModes: CustomTradeMode[]
+  customTradeStyles: CustomTradeStyle[]
+  customCyclePhases: CustomCyclePhase[]
   tradeStyleHistory: TradeStyleHistory[]
   cyclePhaseHistory: CyclePhaseHistory[]
   cycleSummaries: CycleSummary[]

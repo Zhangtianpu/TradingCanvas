@@ -12,7 +12,7 @@
         <router-link to="/review" class="nav-item" @click="sidebarOpen = false">复盘</router-link>
         <router-link to="/positions" class="nav-item" @click="sidebarOpen = false">持仓</router-link>
         <router-link to="/cycle-summary" class="nav-item" @click="sidebarOpen = false">周期总结</router-link>
-        <router-link to="/trade-modes" class="nav-item" @click="sidebarOpen = false">交易模式</router-link>
+        <router-link to="/trade-modes" class="nav-item" @click="sidebarOpen = false">标签管理</router-link>
         <router-link to="/settings" class="nav-item" @click="sidebarOpen = false">设置</router-link>
       </nav>
     </aside>

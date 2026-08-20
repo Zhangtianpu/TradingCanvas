@@ -34,7 +34,7 @@
           <div class="card-body">
             <div class="phase-progression" v-if="cycle.cyclePhaseSnapshot.length > 0">
               <template v-for="(p, idx) in sortPhases(cycle.cyclePhaseSnapshot)" :key="p.id">
-                <span class="phase-chip" :class="`phase-${p.phase}`">
+                <span class="phase-chip" :style="{ background: getCyclePhaseColor(p.phase) }">
                   {{ getCyclePhaseLabel(p.phase) }}
                 </span>
                 <span v-if="idx < cycle.cyclePhaseSnapshot.length - 1" class="phase-arrow">→</span>
@@ -108,7 +108,7 @@
           <span class="overview-label">情绪阶段进程：</span>
           <div class="phase-progression">
             <template v-for="(p, idx) in sortPhases(currentCycle.cyclePhaseSnapshot)" :key="p.id">
-              <span class="phase-chip" :class="`phase-${p.phase}`">
+              <span class="phase-chip" :style="{ background: getCyclePhaseColor(p.phase) }">
                 {{ getCyclePhaseLabel(p.phase) }}
                 <span class="chip-date">{{ p.date.slice(5) }}</span>
               </span>
@@ -121,7 +121,7 @@
           <span class="overview-label">交易风格进程：</span>
           <div class="phase-progression">
             <template v-for="(s, idx) in sortStyles(currentCycle.tradeStyleSnapshot)" :key="s.id">
-              <span class="style-chip" :class="`style-${s.style}`">
+              <span class="style-chip" :style="{ background: getTradeStyleColor(s.style) }">
                 {{ getTradeStyleLabel(s.style) }}
                 <span class="chip-date">{{ s.date.slice(5) }}</span>
               </span>
@@ -318,10 +318,12 @@ import { useEmotionStore } from '@/stores/emotion'
 import { useThemeStore } from '@/stores/theme'
 import { useStockStore } from '@/stores/stock'
 import { useTradeModeStore } from '@/stores/tradeMode'
+import { useCustomTradeStyleStore } from '@/stores/customTradeStyle'
+import { useCustomCyclePhaseStore } from '@/stores/customCyclePhase'
 import { useToast } from '@/composables/useToast'
 import { loadData } from '@/composables/useStorage'
 import type { CycleSummary as CycleSummaryType, CyclePhaseHistory, TradeStyleHistory, EmotionDaily, TradeRecord, Stock } from '@/types'
-import { CYCLE_PHASE_LABELS, TRADE_STYLE_LABELS, THEME_LEVEL_LABELS, THEME_STATUS_LABELS } from '@/types'
+import { THEME_LEVEL_LABELS, THEME_STATUS_LABELS } from '@/types'
 
 ChartJS.register(
   CategoryScale,
@@ -342,6 +344,8 @@ const emotionStore = useEmotionStore()
 const themeStore = useThemeStore()
 const stockStore = useStockStore()
 const tradeModeStore = useTradeModeStore()
+const customTradeStyleStore = useCustomTradeStyleStore()
+const customCyclePhaseStore = useCustomCyclePhaseStore()
 const toast = useToast()
 
 // 删除确认弹窗状态
@@ -784,11 +788,19 @@ onBeforeUnmount(() => {
 
 // 工具方法
 function getCyclePhaseLabel(phase: any) {
-  return CYCLE_PHASE_LABELS[phase as keyof typeof CYCLE_PHASE_LABELS] || phase
+  return customCyclePhaseStore.getLabelByKey(phase) || phase
 }
 
 function getTradeStyleLabel(style: any) {
-  return TRADE_STYLE_LABELS[style as keyof typeof TRADE_STYLE_LABELS] || style
+  return customTradeStyleStore.getLabelByKey(style) || style
+}
+
+function getCyclePhaseColor(phase: any) {
+  return customCyclePhaseStore.getColorByKey(phase) || '#8b949e'
+}
+
+function getTradeStyleColor(style: any) {
+  return customTradeStyleStore.getColorByKey(style) || '#8b949e'
 }
 
 function getThemeLevelLabel(level: any) {
@@ -1010,6 +1022,7 @@ async function handleDelete() {
   border-radius: 4px;
   font-size: 11px;
   font-weight: 500;
+  color: #fff;
 }
 
 .chip-date {
@@ -1024,11 +1037,6 @@ async function handleDelete() {
   font-size: 10px;
 }
 
-.phase-chip.phase-start { background: rgba(63,185,80,0.15); color: #3fb950; }
-.phase-chip.phase-main { background: rgba(248,81,73,0.15); color: #f85149; }
-.phase-chip.phase-diverge { background: rgba(163,113,247,0.15); color: #a371f7; }
-.phase-chip.phase-retreat { background: rgba(139,148,158,0.15); color: #8b949e; }
-
 .style-chip {
   display: inline-flex;
   align-items: center;
@@ -1036,10 +1044,8 @@ async function handleDelete() {
   border-radius: 4px;
   font-size: 11px;
   font-weight: 500;
+  color: #fff;
 }
-
-.style-chip.style-trend { background: rgba(88,166,255,0.15); color: #58a6ff; }
-.style-chip.style-board { background: rgba(240,192,64,0.15); color: #f0c040; }
 
 .cycle-desc {
   font-size: 12px;
