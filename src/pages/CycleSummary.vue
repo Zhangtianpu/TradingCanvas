@@ -148,7 +148,8 @@
           <StairChart
             :emotions="cycleEmotions"
             title="周期连板楼梯图"
-            :chartId="`cycleStair_${currentCycle.id}`"
+            chartId="stairChart1"
+            :read-only="true"
           />
         </div>
 

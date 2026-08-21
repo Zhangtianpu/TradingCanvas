@@ -317,20 +317,27 @@ export function saveData(data: AppStorage): void {
   }
 }
 
-export function exportData(): void {
-  const data = loadData()
-  // 收集所有独立存储的 localStorage 项（天梯图标签/高度、手续费、看板排序等）
+// 独立 localStorage key 的前缀和精确 key（用于导出/导入/清理）
+const EXTRA_KEY_PREFIXES = ['stairChartTags_', 'stairChartHeightCalc_', 'stairChartTitle_']
+const EXTRA_EXACT_KEYS = ['feeSettings', 'dashboardModuleOrder']
+
+// 收集所有独立 localStorage 项
+function collectExtras(): Record<string, string> {
   const extras: Record<string, string> = {}
-  const prefixes = ['stairChartTags_', 'stairChartHeightCalc_']
-  const exactKeys = ['feeSettings', 'dashboardModuleOrder']
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i)
     if (!key) continue
-    if (prefixes.some(p => key.startsWith(p)) || exactKeys.includes(key)) {
+    if (EXTRA_KEY_PREFIXES.some(p => key.startsWith(p)) || EXTRA_EXACT_KEYS.includes(key)) {
       const val = localStorage.getItem(key)
       if (val !== null) extras[key] = val
     }
   }
+  return extras
+}
+
+export function exportData(): void {
+  const data = loadData()
+  const extras = collectExtras()
   const exportPayload = { ...data, _extras: extras }
   const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
@@ -357,18 +364,7 @@ export function autoBackupIfNeeded(): void {
   const intervalMs = settings.autoBackupInterval * 60 * 1000
 
   if (now.getTime() - lastBackup.getTime() >= intervalMs) {
-    // 收集独立 localStorage 项
-    const extras: Record<string, string> = {}
-    const prefixes = ['stairChartTags_', 'stairChartHeightCalc_']
-    const exactKeys = ['feeSettings', 'dashboardModuleOrder']
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i)
-      if (!key) continue
-      if (prefixes.some(p => key.startsWith(p)) || exactKeys.includes(key)) {
-        const val = localStorage.getItem(key)
-        if (val !== null) extras[key] = val
-      }
-    }
+    const extras = collectExtras()
     const exportPayload = { ...data, _extras: extras }
     // 执行自动备份
     const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' })
@@ -431,13 +427,11 @@ export function importData(file: File): Promise<AppStorage> {
 export function clearData(): void {
   localStorage.removeItem(STORAGE_KEY)
   // 同时清理独立存储的 localStorage 项
-  const prefixes = ['stairChartTags_', 'stairChartHeightCalc_']
-  const exactKeys = ['feeSettings', 'dashboardModuleOrder']
   const keysToRemove: string[] = []
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i)
     if (!key) continue
-    if (prefixes.some(p => key.startsWith(p)) || exactKeys.includes(key)) {
+    if (EXTRA_KEY_PREFIXES.some(p => key.startsWith(p)) || EXTRA_EXACT_KEYS.includes(key)) {
       keysToRemove.push(key)
     }
   }

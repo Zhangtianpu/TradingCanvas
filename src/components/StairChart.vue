@@ -11,9 +11,9 @@
           @keyup.esc="cancelEditTitle"
           ref="titleInputRef"
         />
-        <span v-else class="chart-title clickable" @click="startEditTitle" title="点击修改名称">
+        <span v-else class="chart-title" :class="{ clickable: !readOnly }" @click="!readOnly && startEditTitle()" :title="readOnly ? '' : '点击修改名称'">
           {{ displayTitle }}
-          <span class="edit-icon">✎</span>
+          <span v-if="!readOnly" class="edit-icon">✎</span>
         </span>
       </div>
       <div class="chart-legend">
@@ -67,6 +67,7 @@
                 :key="e.id"
                 type="text"
                 :value="getHeightCalc(e)"
+                :disabled="readOnly"
                 @change="(ev) => updateHeightCalc(e, (ev.target as HTMLInputElement).value)"
                 @mousedown.stop
                 draggable="false"
@@ -83,10 +84,10 @@
                     v-for="e in displayEmotions"
                     :key="e.id"
                     class="date-header"
-                    :class="{ 'is-clear': e.isClear }"
-                    @click="handleDateClick(e)"
-                    :title="e.isClear ? '点击取消出清标记' : '点击标记为出清'"
-                  >
+                  :class="{ 'is-clear': e.isClear }"
+                  @click="!readOnly && handleDateClick(e)"
+                  :title="readOnly ? '' : (e.isClear ? '点击取消出清标记' : '点击标记为出清')"
+                >
                     {{ e.date.slice(5) }}
                     <span v-if="e.isClear" class="clear-badge">清</span>
                   </th>
@@ -104,9 +105,10 @@
                     <template v-if="hasStockAtHeight(e, h)">
                       <div class="cell-content">
                         <span
-                          class="stock-name clickable"
-                          @click.stop="handleCellClick(e, h)"
-                          title="点击编辑"
+                          class="stock-name"
+                          :class="{ clickable: !readOnly }"
+                          @click.stop="!readOnly && handleCellClick(e, h)"
+                          :title="readOnly ? '' : '点击编辑'"
                         >
                           {{ getStockAtHeight(e, h)?.name }}
                         </span>
@@ -122,14 +124,15 @@
                           <span v-if="getStockAtHeight(e, h)?.isNextDayPremium" class="premium-badge">溢</span>
                         </div>
                       </div>
-                      <span class="edit-hint" @click.stop="handleCellClick(e, h)">✎</span>
+                      <span v-if="!readOnly" class="edit-hint" @click.stop="handleCellClick(e, h)">✎</span>
                     </template>
                     <template v-else-if="h === e.maxBoardHeight">
                       <div class="cell-content">
                         <span
-                          class="stock-name clickable"
-                          @click.stop="handleCellClick(e, h)"
-                          title="点击编辑"
+                          class="stock-name"
+                          :class="{ clickable: !readOnly }"
+                          @click.stop="!readOnly && handleCellClick(e, h)"
+                          :title="readOnly ? '' : '点击编辑'"
                         >
                           {{ getFirstStock(e)?.name || '-' }}
                         </span>
@@ -291,6 +294,7 @@ const props = defineProps<{
   dateRange?: number
   title?: string
   chartId?: string
+  readOnly?: boolean
 }>()
 
 // 自定义标题（支持持久化，每个chartId独立存储）
