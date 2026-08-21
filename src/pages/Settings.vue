@@ -128,6 +128,8 @@ import { useStockStore } from '@/stores/stock'
 import { useEmotionStore } from '@/stores/emotion'
 import { useReviewStore } from '@/stores/review'
 import { useTradeModeStore } from '@/stores/tradeMode'
+import { useCustomTradeStyleStore } from '@/stores/customTradeStyle'
+import { useCustomCyclePhaseStore } from '@/stores/customCyclePhase'
 import { useToast } from '@/composables/useToast'
 import { useTheme } from '@/composables/useTheme'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -138,6 +140,8 @@ const stockStore = useStockStore()
 const emotionStore = useEmotionStore()
 const reviewStore = useReviewStore()
 const tradeModeStore = useTradeModeStore()
+const customTradeStyleStore = useCustomTradeStyleStore()
+const customCyclePhaseStore = useCustomCyclePhaseStore()
 const toast = useToast()
 const { currentTheme, setTheme } = useTheme()
 
@@ -198,8 +202,12 @@ async function handleImport(event: Event) {
     emotionStore.reload()
     reviewStore.reload()
     tradeModeStore.reload()
+    customTradeStyleStore.reload()
+    customCyclePhaseStore.reload()
     settings.value = loadData().settings
-    toast.success('数据导入成功')
+    toast.success('数据导入成功，即将刷新页面...')
+    // 刷新页面以确保天梯图标签/高度等独立 localStorage 项被重新加载
+    setTimeout(() => window.location.reload(), 800)
   } catch (e: any) {
     toast.error(e.message || '导入失败')
   }

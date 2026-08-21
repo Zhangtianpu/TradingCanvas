@@ -319,7 +319,20 @@ export function saveData(data: AppStorage): void {
 
 export function exportData(): void {
   const data = loadData()
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  // 收集所有独立存储的 localStorage 项（天梯图标签/高度、手续费、看板排序等）
+  const extras: Record<string, string> = {}
+  const prefixes = ['stairChartTags_', 'stairChartHeightCalc_']
+  const exactKeys = ['feeSettings', 'dashboardModuleOrder']
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (!key) continue
+    if (prefixes.some(p => key.startsWith(p)) || exactKeys.includes(key)) {
+      const val = localStorage.getItem(key)
+      if (val !== null) extras[key] = val
+    }
+  }
+  const exportPayload = { ...data, _extras: extras }
+  const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -344,8 +357,21 @@ export function autoBackupIfNeeded(): void {
   const intervalMs = settings.autoBackupInterval * 60 * 1000
 
   if (now.getTime() - lastBackup.getTime() >= intervalMs) {
+    // 收集独立 localStorage 项
+    const extras: Record<string, string> = {}
+    const prefixes = ['stairChartTags_', 'stairChartHeightCalc_']
+    const exactKeys = ['feeSettings', 'dashboardModuleOrder']
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (!key) continue
+      if (prefixes.some(p => key.startsWith(p)) || exactKeys.includes(key)) {
+        const val = localStorage.getItem(key)
+        if (val !== null) extras[key] = val
+      }
+    }
+    const exportPayload = { ...data, _extras: extras }
     // 执行自动备份
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -372,7 +398,8 @@ export function importData(file: File): Promise<AppStorage> {
     const reader = new FileReader()
     reader.onload = (e) => {
       try {
-        const data = JSON.parse(e.target?.result as string) as AppStorage
+        const raw = JSON.parse(e.target?.result as string)
+        const data = raw as AppStorage & { _extras?: Record<string, string> }
         if (!data.themes || !data.stocks) {
           reject(new Error('数据格式不正确'))
           return
@@ -383,6 +410,14 @@ export function importData(file: File): Promise<AppStorage> {
           appVersion: APP_VERSION
         }
         saveData(merged)
+        // 恢复独立 localStorage 项（天梯图标签/高度、手续费、看板排序等）
+        if (data._extras && typeof data._extras === 'object') {
+          for (const [k, v] of Object.entries(data._extras)) {
+            if (typeof v === 'string') {
+              localStorage.setItem(k, v)
+            }
+          }
+        }
         resolve(merged)
       } catch {
         reject(new Error('解析文件失败'))
@@ -395,6 +430,18 @@ export function importData(file: File): Promise<AppStorage> {
 
 export function clearData(): void {
   localStorage.removeItem(STORAGE_KEY)
+  // 同时清理独立存储的 localStorage 项
+  const prefixes = ['stairChartTags_', 'stairChartHeightCalc_']
+  const exactKeys = ['feeSettings', 'dashboardModuleOrder']
+  const keysToRemove: string[] = []
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (!key) continue
+    if (prefixes.some(p => key.startsWith(p)) || exactKeys.includes(key)) {
+      keysToRemove.push(key)
+    }
+  }
+  keysToRemove.forEach(k => localStorage.removeItem(k))
 }
 
 export function generateId(): string {
