@@ -267,16 +267,7 @@
             <span class="range-tag">{{ cycleThemes.length }} 个活跃题材</span>
           </div>
           <div v-if="cycleThemes.length === 0" class="empty-hint small">该周期内暂无题材记录</div>
-          <div v-else class="theme-list">
-            <div v-for="t in cycleThemes" :key="t.id" class="theme-row" @click="$router.push(`/themes/${t.id}`)">
-              <span class="theme-level-tag" :class="`level-${t.level}`">{{ getThemeLevelLabel(t.level) }}</span>
-              <span class="theme-name">{{ t.name }}</span>
-              <span class="theme-sector">{{ t.sector }}</span>
-              <span class="theme-status" :class="`status-${t.status}`">{{ getThemeStatusLabel(t.status) }}</span>
-              <span class="theme-burst">启动：{{ t.burstDate.slice(5) }}</span>
-              <span v-if="t.endDate" class="theme-end">结束：{{ t.endDate.slice(5) }}</span>
-            </div>
-          </div>
+          <ThemeTree v-else :themes="cycleThemes" :read-only="true" :hide-header="true" />
         </div>
       </template>
 
@@ -313,18 +304,19 @@ import {
   Filler
 } from 'chart.js'
 import StairChart from '@/components/StairChart.vue'
+import ThemeTree from '@/components/ThemeTree.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { useCycleSummaryStore } from '@/stores/cycleSummary'
 import { useEmotionStore } from '@/stores/emotion'
 import { useThemeStore } from '@/stores/theme'
 import { useStockStore } from '@/stores/stock'
 import { useTradeModeStore } from '@/stores/tradeMode'
+import { useReviewStore } from '@/stores/review'
 import { useCustomTradeStyleStore } from '@/stores/customTradeStyle'
 import { useCustomCyclePhaseStore } from '@/stores/customCyclePhase'
 import { useToast } from '@/composables/useToast'
 import { loadData } from '@/composables/useStorage'
 import type { CycleSummary as CycleSummaryType, CyclePhaseHistory, TradeStyleHistory, EmotionDaily, TradeRecord, Stock } from '@/types'
-import { THEME_LEVEL_LABELS, THEME_STATUS_LABELS } from '@/types'
 
 ChartJS.register(
   CategoryScale,
@@ -345,6 +337,7 @@ const emotionStore = useEmotionStore()
 const themeStore = useThemeStore()
 const stockStore = useStockStore()
 const tradeModeStore = useTradeModeStore()
+const reviewStore = useReviewStore()
 const customTradeStyleStore = useCustomTradeStyleStore()
 const customCyclePhaseStore = useCustomCyclePhaseStore()
 const toast = useToast()
@@ -608,7 +601,8 @@ const marketCharts = [
   { key: 'limitDown', title: '跌停家数', color: '#3fb950', fill: true },
   { key: 'continuousBoard', title: '连板家数', color: '#f0c040', fill: true },
   { key: 'sealRate', title: '封板率%', color: '#58a6ff', fill: true },
-  { key: 'height', title: '空间板高度', color: '#f0c040', fill: true }
+  { key: 'height', title: '空间板高度', color: '#f0c040', fill: true },
+  { key: 'targetStocks', title: '目标标的', color: '#a371f7', fill: true }
 ]
 
 // 容器 ref（通过 querySelectorAll 查找 canvas，避免函数 ref 时序问题）
@@ -630,7 +624,8 @@ function getChartData(key: string): number[] {
     limitDown: e => e.limitDownCount || 0,
     continuousBoard: e => e.continuousBoardCount || 0,
     sealRate: e => e.sealRate || 0,
-    height: e => e.maxBoardHeight || 0
+    height: e => e.maxBoardHeight || 0,
+    targetStocks: e => reviewStore.getReviewByDate(e.date)?.targetStocks || 0
   }
   return cycleEmotions.value.map(dataMap[key] || (e => 0))
 }
@@ -802,14 +797,6 @@ function getCyclePhaseColor(phase: any) {
 
 function getTradeStyleColor(style: any) {
   return customTradeStyleStore.getColorByKey(style) || '#8b949e'
-}
-
-function getThemeLevelLabel(level: any) {
-  return THEME_LEVEL_LABELS[level as keyof typeof THEME_LEVEL_LABELS] || level
-}
-
-function getThemeStatusLabel(status: any) {
-  return THEME_STATUS_LABELS[status as keyof typeof THEME_STATUS_LABELS] || status
 }
 
 function sortPhases(phases: CyclePhaseHistory[]) {
@@ -1194,74 +1181,7 @@ async function handleDelete() {
   width: 100%;
 }
 
-/* 题材列表 */
-.theme-list {
-  display: flex;
-  flex-direction: column;
-}
-
-.theme-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 4px;
-  border-bottom: 1px solid var(--border-color);
-  cursor: pointer;
-  font-size: 12px;
-  flex-wrap: wrap;
-}
-
-.theme-row:hover {
-  background: var(--bg-tertiary);
-  margin: 0 -4px;
-  padding: 8px 8px;
-}
-
-.theme-row:last-child {
-  border-bottom: none;
-}
-
-.theme-level-tag {
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-size: 10px;
-  font-weight: 500;
-}
-
-.theme-level-tag.level-main { background: rgba(248,81,73,0.15); color: #f85149; }
-.theme-level-tag.level-sub { background: rgba(88,166,255,0.15); color: #58a6ff; }
-.theme-level-tag.level-rotation { background: rgba(139,148,158,0.15); color: #8b949e; }
-
-.theme-name {
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.theme-sector {
-  color: var(--text-tertiary);
-  font-size: 11px;
-}
-
-.theme-status {
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-size: 10px;
-  font-weight: 500;
-}
-
-.theme-status.status-burst { background: rgba(248,81,73,0.15); color: #f85149; }
-.theme-status.status-ferment { background: rgba(240,192,64,0.15); color: #f0c040; }
-.theme-status.status-climax { background: rgba(248,81,73,0.2); color: #f85149; }
-.theme-status.status-diverge { background: rgba(163,113,247,0.15); color: #a371f7; }
-.theme-status.status-retreat { background: rgba(139,148,158,0.15); color: #8b949e; }
-.theme-status.status-rebound { background: rgba(63,185,80,0.15); color: #3fb950; }
-.theme-status.status-adjust { background: rgba(139,148,158,0.1); color: var(--text-secondary); }
-.theme-status.status-repair { background: rgba(88,166,255,0.15); color: #58a6ff; }
-
-.theme-burst, .theme-end {
-  color: var(--text-tertiary);
-  font-size: 11px;
-}
+/* 题材列表（使用 ThemeTree 组件，无需额外样式） */
 
 /* 已平仓记录 */
 .closed-section {

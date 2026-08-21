@@ -1,6 +1,6 @@
 <template>
   <div class="theme-tree-container">
-    <div class="tree-header">
+    <div class="tree-header" v-if="!hideHeader">
       <span class="header-title">活跃题材</span>
       <router-link to="/themes" class="view-all">管理题材 →</router-link>
     </div>
@@ -12,7 +12,7 @@
         <div
           class="theme-row"
           :class="{ ended: !!mainTheme.endDate, dragging: draggedThemeId === mainTheme.id, 'drag-over': dragOverThemeId === mainTheme.id }"
-          draggable="true"
+          :draggable="!readOnly"
           @dragstart="onThemeDragStart(mainTheme.id, $event)"
           @dragend="onThemeDragEnd"
           @dragover="onThemeDragOver(mainTheme.id, $event)"
@@ -26,7 +26,7 @@
                 {{ collapsedThemes.has(mainTheme.id) ? '▶' : '▼' }}
               </span>
               <span class="bar-name" @click="$router.push(`/themes/${mainTheme.id}`)">{{ mainTheme.name }}</span>
-              <div class="status-dropdown-wrapper" v-if="!mainTheme.endDate">
+              <div class="status-dropdown-wrapper" v-if="!mainTheme.endDate && !readOnly">
                 <span class="bar-status" @click.stop="toggleStatusDropdown(mainTheme.id)">{{ getStatusLabel(mainTheme.status) }} ▾</span>
                 <div class="status-dropdown" v-if="openStatusDropdown === mainTheme.id" @click.stop>
                   <div
@@ -41,11 +41,11 @@
                   </div>
                 </div>
               </div>
-              <span v-else class="bar-status">已结束</span>
+              <span v-else class="bar-status" :class="{ 'non-interactive': readOnly }">{{ mainTheme.endDate ? '已结束' : getStatusLabel(mainTheme.status) }}</span>
             </div>
             <!-- 中间：时间条 -->
             <div class="bar-timeline">
-              <span class="tl-start editable" @click="openEditThemeDate(mainTheme)" title="点击编辑启动时间">{{ mainTheme.burstDate.slice(5) }}</span>
+              <span class="tl-start" :class="{ editable: !readOnly }" @click="!readOnly && openEditThemeDate(mainTheme)" :title="!readOnly ? '点击编辑启动时间' : ''">{{ mainTheme.burstDate.slice(5) }}</span>
               <div class="tl-track">
                 <div class="tl-fill" :class="{ ended: !!mainTheme.endDate }"></div>
                 <!-- 状态变化节点 -->
@@ -65,7 +65,7 @@
               <span class="tl-end active" v-else>至今</span>
             </div>
             <!-- 右侧：操作按钮 -->
-            <div class="bar-right">
+            <div class="bar-right" v-if="!readOnly">
               <button v-if="!mainTheme.endDate" class="btn-end" @click.stop="endTheme(mainTheme.id)">结束</button>
               <button v-else class="btn-start" @click.stop="restartTheme(mainTheme.id)">开始</button>
               <button class="btn-remove" @click.stop="removeTheme(mainTheme.id)">移除</button>
@@ -76,7 +76,7 @@
           <div class="status-history-bar" v-if="!collapsedThemes.has(mainTheme.id) && mainTheme.statusHistory && mainTheme.statusHistory.length > 0">
             <div class="status-history-track">
               <template v-for="(sh, si) in mainTheme.statusHistory" :key="si">
-                <div class="status-history-item editable" :class="`shi-${sh.status}`" @click.stop="openEditStatusHistory(mainTheme.id, si)">
+                <div class="status-history-item" :class="[`shi-${sh.status}`, { editable: !readOnly }]" @click.stop="!readOnly && openEditStatusHistory(mainTheme.id, si)">
                   <span class="shi-dot"></span>
                   <span class="shi-label">{{ getStatusLabel(sh.status) }}</span>
                   <span class="shi-date">{{ sh.date.slice(5) }}</span>
@@ -84,7 +84,7 @@
                 </div>
                 <span v-if="si < mainTheme.statusHistory!.length - 1" class="shi-arrow">→</span>
               </template>
-              <button class="btn-add-status" @click.stop="openAddStatusHistory(mainTheme.id)" title="添加状态">+</button>
+              <button v-if="!readOnly" class="btn-add-status" @click.stop="openAddStatusHistory(mainTheme.id)" title="添加状态">+</button>
             </div>
           </div>
 
@@ -97,7 +97,7 @@
               <span class="sh-arrow">→</span>
               <span class="sh-end">结束</span>
               <span class="sh-height">高度</span>
-              <span class="sh-actions">操作</span>
+              <span class="sh-actions" v-if="!readOnly">操作</span>
             </div>
             <div
               v-for="(stock, idx) in getThemeStocks(mainTheme.id)"
@@ -109,12 +109,12 @@
               <span class="stock-dot"></span>
               <span class="stock-name">{{ stock.name }}</span>
               <span class="stock-role-tag">{{ getStockRoleLabel(stock.role) }}</span>
-              <span class="stock-start editable" @click="openEditStartDate(stock)" title="点击编辑启动时间">{{ getStockStartDate(stock).slice(5) }}</span>
+              <span class="stock-start" :class="{ editable: !readOnly }" @click="!readOnly && openEditStartDate(stock)" :title="!readOnly ? '点击编辑启动时间' : ''">{{ getStockStartDate(stock).slice(5) }}</span>
               <span class="stock-sep">→</span>
               <span class="stock-end" v-if="stock.endDate">{{ stock.endDate.slice(5) }}</span>
               <span class="stock-end active" v-else>进行中</span>
               <span class="stock-height" v-if="getMaxBoardHeight(stock) > 0">{{ getMaxBoardHeight(stock) }}板</span>
-              <span class="stock-actions">
+              <span class="stock-actions" v-if="!readOnly">
                 <button v-if="!stock.endDate" class="btn-end sm" @click.stop="endStock(stock.id)">结束</button>
                 <button v-else class="btn-start sm" @click.stop="restartStock(stock.id)">开始</button>
                 <button class="btn-remove sm" @click.stop="removeStock(stock.id)">移除</button>
@@ -137,7 +137,7 @@
                     {{ collapsedThemes.has(subTheme.id) ? '▶' : '▼' }}
                   </span>
                   <span class="bar-name small" @click="$router.push(`/themes/${subTheme.id}`)">{{ subTheme.name }}</span>
-                  <div class="status-dropdown-wrapper" v-if="!subTheme.endDate">
+                  <div class="status-dropdown-wrapper" v-if="!subTheme.endDate && !readOnly">
                     <span class="bar-status small" @click.stop="toggleStatusDropdown(subTheme.id)">{{ getStatusLabel(subTheme.status) }} ▾</span>
                     <div class="status-dropdown" v-if="openStatusDropdown === subTheme.id" @click.stop>
                       <div
@@ -152,10 +152,10 @@
                       </div>
                     </div>
                   </div>
-                  <span v-else class="bar-status small">已结束</span>
+                  <span v-else class="bar-status small" :class="{ 'non-interactive': readOnly }">{{ subTheme.endDate ? '已结束' : getStatusLabel(subTheme.status) }}</span>
                 </div>
                 <div class="bar-timeline small">
-                  <span class="tl-start editable" @click="openEditThemeDate(subTheme)" title="点击编辑启动时间">{{ subTheme.burstDate.slice(5) }}</span>
+                  <span class="tl-start" :class="{ editable: !readOnly }" @click="!readOnly && openEditThemeDate(subTheme)" :title="!readOnly ? '点击编辑启动时间' : ''">{{ subTheme.burstDate.slice(5) }}</span>
                   <div class="tl-track">
                     <div class="tl-fill" :class="{ ended: !!subTheme.endDate }"></div>
                     <!-- 状态变化节点 -->
@@ -173,7 +173,7 @@
                   <span class="tl-end" v-if="subTheme.endDate">{{ subTheme.endDate.slice(5) }}</span>
                   <span class="tl-end active" v-else>至今</span>
                 </div>
-                <div class="bar-right">
+                <div class="bar-right" v-if="!readOnly">
                   <button v-if="!subTheme.endDate" class="btn-end sm" @click.stop="endTheme(subTheme.id)">结束</button>
                   <button v-else class="btn-start sm" @click.stop="restartTheme(subTheme.id)">开始</button>
                   <button class="btn-remove sm" @click.stop="removeTheme(subTheme.id)">移除</button>
@@ -184,7 +184,7 @@
               <div class="status-history-bar sub-history" v-if="!collapsedThemes.has(subTheme.id) && subTheme.statusHistory && subTheme.statusHistory.length > 0">
                 <div class="status-history-track">
                   <template v-for="(sh, si) in subTheme.statusHistory" :key="si">
-                    <div class="status-history-item editable" :class="`shi-${sh.status}`" @click.stop="openEditStatusHistory(subTheme.id, si)">
+                    <div class="status-history-item" :class="[`shi-${sh.status}`, { editable: !readOnly }]" @click.stop="!readOnly && openEditStatusHistory(subTheme.id, si)">
                       <span class="shi-dot"></span>
                       <span class="shi-label">{{ getStatusLabel(sh.status) }}</span>
                       <span class="shi-date">{{ sh.date.slice(5) }}</span>
@@ -192,7 +192,7 @@
                     </div>
                     <span v-if="si < subTheme.statusHistory!.length - 1" class="shi-arrow">→</span>
                   </template>
-                  <button class="btn-add-status" @click.stop="openAddStatusHistory(subTheme.id)" title="添加状态">+</button>
+                  <button v-if="!readOnly" class="btn-add-status" @click.stop="openAddStatusHistory(subTheme.id)" title="添加状态">+</button>
                 </div>
               </div>
 
@@ -208,12 +208,12 @@
                   <span class="stock-dot"></span>
                   <span class="stock-name">{{ stock.name }}</span>
                   <span class="stock-role-tag">{{ getStockRoleLabel(stock.role) }}</span>
-                  <span class="stock-start editable" @click="openEditStartDate(stock)" title="点击编辑启动时间">{{ getStockStartDate(stock).slice(5) }}</span>
+                  <span class="stock-start" :class="{ editable: !readOnly }" @click="!readOnly && openEditStartDate(stock)" :title="!readOnly ? '点击编辑启动时间' : ''">{{ getStockStartDate(stock).slice(5) }}</span>
                   <span class="stock-sep">→</span>
                   <span class="stock-end" v-if="stock.endDate">{{ stock.endDate.slice(5) }}</span>
                   <span class="stock-end active" v-else>进行中</span>
                   <span class="stock-height" v-if="getMaxBoardHeight(stock) > 0">{{ getMaxBoardHeight(stock) }}板</span>
-                  <span class="stock-actions">
+                  <span class="stock-actions" v-if="!readOnly">
                     <button v-if="!stock.endDate" class="btn-end sm" @click.stop="endStock(stock.id)">结束</button>
                     <button v-else class="btn-start sm" @click.stop="restartStock(stock.id)">开始</button>
                     <button class="btn-remove sm" @click.stop="removeStock(stock.id)">移除</button>
@@ -313,6 +313,12 @@ import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useThemeStore } from '@/stores/theme'
 import { useStockStore } from '@/stores/stock'
 import type { Theme, ThemeStatus, StockRole, Stock, StatusHistory } from '@/types'
+
+const props = defineProps<{
+  themes?: Theme[]      // 外部传入的题材列表（覆盖默认从 store 读取，且不再按状态过滤）
+  readOnly?: boolean    // 只读模式：隐藏操作按钮、禁用拖拽与编辑
+  hideHeader?: boolean  // 隐藏顶部"活跃题材"标题和"管理题材"链接
+}>()
 
 const themeStore = useThemeStore()
 const stockStore = useStockStore()
@@ -468,12 +474,28 @@ function deleteStatusHistory() {
 }
 
 const mainThemes = computed(() => {
-  // 使用store原始顺序（拖拽排序后的顺序），不按日期重排
+  // 外部传入题材列表：展示主线 + 轮动 + 无主线支线作为顶级行（不再按状态过滤）
+  if (props.themes) {
+    const mainIds = new Set(props.themes.filter(t => t.level === 'main').map(t => t.id))
+    return props.themes.filter(t =>
+      t.level === 'main' ||
+      t.level === 'rotation' ||
+      (t.level === 'sub' && (!t.parentId || !mainIds.has(t.parentId)))
+    )
+  }
+  // 默认行为：只展示活跃状态的主线，使用store原始顺序（拖拽排序后的顺序）
   return themeStore.themes
     .filter(t => activeStatuses.includes(t.status) && t.level === 'main')
 })
 
 function getSubThemes(parentId: string) {
+  // 外部传入题材列表：直接按 parentId 过滤
+  if (props.themes) {
+    return [...props.themes]
+      .filter(t => t.parentId === parentId)
+      .sort((a, b) => a.burstDate.localeCompare(b.burstDate))
+  }
+  // 默认行为：只展示活跃状态的支线
   return [...themeStore.themes]
     .filter(t => activeStatuses.includes(t.status) && t.parentId === parentId)
     .sort((a, b) => a.burstDate.localeCompare(b.burstDate))
@@ -726,8 +748,11 @@ function onThemeDrop(targetId: string, e: DragEvent) {
   color: #fff; font-weight: 500; white-space: nowrap; cursor: pointer;
   transition: filter 0.15s;
 }
+
 .bar-status:hover { filter: brightness(1.15); }
 .bar-status.small { font-size: 10px; padding: 1px 6px; }
+.bar-status.non-interactive { cursor: default; }
+.bar-status.non-interactive:hover { filter: none; }
 
 /* 时间轴 */
 .bar-timeline {
