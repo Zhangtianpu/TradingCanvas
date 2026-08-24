@@ -38,6 +38,7 @@
         <div class="section-title">情绪周期</div>
         <div class="header-actions">
           <button class="btn-save-cycle" @click="openSaveCycleDialog">保存当前周期</button>
+          <button class="btn-reset" @click="showResetConfirm = true">重置</button>
           <button class="btn-add" @click="openAddCyclePhase">+ 添加</button>
         </div>
       </div>
@@ -139,6 +140,31 @@
         </div>
       </div>
     </div>
+
+    <!-- 保存后选择是否重置 -->
+    <div class="edit-modal" v-if="showResetAfterSave" @click.self="keepAfterSave">
+      <div class="modal-content reset-modal">
+        <div class="modal-header">
+          <span class="modal-title">保存成功</span>
+        </div>
+        <div class="modal-body">
+          <p class="reset-hint">是否清空当前的交易风格与情绪周期？</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel" @click="keepAfterSave">保留</button>
+          <button class="btn-reset-confirm" @click="confirmResetAfterSave">清空</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 重置确认弹窗 -->
+    <ConfirmDialog
+      :show="showResetConfirm"
+      title="清空交易风格与情绪周期"
+      message="确定要清空当前设置的所有交易风格与情绪周期记录吗？此操作不可撤销。"
+      @confirm="handleResetAll"
+      @cancel="showResetConfirm = false"
+    />
   </div>
 </template>
 
@@ -150,6 +176,7 @@ import { useCycleSummaryStore } from '@/stores/cycleSummary'
 import { useCustomTradeStyleStore } from '@/stores/customTradeStyle'
 import { useCustomCyclePhaseStore } from '@/stores/customCyclePhase'
 import { useToast } from '@/composables/useToast'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import type { TradeStyle, CyclePhase, TradeStyleHistory, CyclePhaseHistory } from '@/types'
 
 const router = useRouter()
@@ -329,6 +356,9 @@ function deleteRecord() {
 
 // ===== 保存当前周期 =====
 const showSaveCycleDialog = ref(false)
+const showResetConfirm = ref(false)
+const showResetAfterSave = ref(false)
+const savedCycleId = ref('')
 const cycleForm = ref({
   name: '',
   startDate: '',
@@ -415,9 +445,28 @@ function handleSaveCycle() {
   })
 
   toast.success(`周期「${summary.name}」已保存`)
+  savedCycleId.value = summary.id
   closeSaveCycleDialog()
-  // 跳转到周期总结页面查看
-  router.push(`/cycle-summary/${summary.id}`)
+  // 保存后询问是否重置当前交易风格与情绪周期
+  showResetAfterSave.value = true
+}
+
+function keepAfterSave() {
+  showResetAfterSave.value = false
+  router.push(`/cycle-summary/${savedCycleId.value}`)
+}
+
+function confirmResetAfterSave() {
+  cycleStore.resetAll()
+  toast.success('交易风格与情绪周期已清空')
+  showResetAfterSave.value = false
+  router.push(`/cycle-summary/${savedCycleId.value}`)
+}
+
+function handleResetAll() {
+  cycleStore.resetAll()
+  showResetConfirm.value = false
+  toast.success('交易风格与情绪周期已清空')
 }
 </script>
 
@@ -502,6 +551,23 @@ function handleSaveCycle() {
 .btn-save-cycle:hover {
   background: rgba(63,185,80,0.25);
   border-color: #3fb950;
+}
+
+.btn-reset {
+  padding: 3px 10px;
+  font-size: 11px;
+  background: rgba(248,81,73,0.1);
+  border: 1px solid rgba(248,81,73,0.35);
+  border-radius: 4px;
+  cursor: pointer;
+  color: #f85149;
+  transition: all 0.15s;
+  font-weight: 500;
+}
+
+.btn-reset:hover {
+  background: rgba(248,81,73,0.2);
+  border-color: #f85149;
 }
 
 .current-style {
@@ -712,6 +778,21 @@ function handleSaveCycle() {
   background: rgba(248,81,73,0.25);
 }
 
+.btn-reset-confirm {
+  padding: 6px 16px;
+  font-size: 13px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: rgba(248,81,73,0.15);
+  border: 1px solid rgba(248,81,73,0.3);
+  color: #f85149;
+}
+
+.btn-reset-confirm:hover {
+  background: rgba(248,81,73,0.25);
+}
+
 .btn-save {
   background: var(--color-blue);
   border: none;
@@ -720,6 +801,19 @@ function handleSaveCycle() {
 
 .btn-save:hover {
   filter: brightness(1.1);
+}
+
+/* 保存后重置选择弹窗 */
+.reset-modal {
+  width: 360px;
+  max-width: 90vw;
+}
+
+.reset-hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
 }
 
 /* 保存周期弹窗 */

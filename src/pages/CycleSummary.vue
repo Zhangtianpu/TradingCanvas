@@ -43,7 +43,7 @@
             <div class="phase-progression empty" v-else>
               <span class="no-phase">无情绪阶段记录</span>
             </div>
-            <div class="cycle-summary-text" v-if="cycle.summary">{{ cycle.summary }}</div>
+            <div class="cycle-summary-text" v-if="cycle.summary" @click.stop>{{ cycle.summary }}</div>
             <div class="cycle-desc" v-else-if="cycle.description">{{ cycle.description }}</div>
           </div>
           <div class="card-footer">
@@ -86,9 +86,26 @@
       <!-- 周期概要 -->
       <div class="cycle-overview">
         <div class="overview-row">
-          <div class="overview-item">
+          <div class="overview-item name-item">
             <span class="overview-label">周期名称</span>
-            <span class="overview-value">{{ currentCycle.name }}</span>
+            <template v-if="!editingName">
+              <span class="overview-value">{{ currentCycle.name }}</span>
+              <button class="btn-rename" @click="startEditName">重命名</button>
+            </template>
+            <template v-else>
+              <input
+                v-model="nameForm"
+                class="name-input"
+                maxlength="30"
+                placeholder="输入周期名称"
+                @keyup.enter="saveName"
+                @keyup.esc="cancelEditName"
+              />
+              <div class="name-actions">
+                <button class="btn-cancel" @click="cancelEditName">取消</button>
+                <button class="btn-save" @click="saveName">保存</button>
+              </div>
+            </template>
           </div>
           <div class="overview-item">
             <span class="overview-label">起止时间</span>
@@ -348,6 +365,33 @@ const showDeleteConfirm = ref(false)
 // ===== 周期总结编辑 =====
 const editingSummary = ref(false)
 const summaryForm = ref('')
+
+// ===== 周期名称编辑 =====
+const editingName = ref(false)
+const nameForm = ref('')
+
+function startEditName() {
+  if (!currentCycle.value) return
+  nameForm.value = currentCycle.value.name
+  editingName.value = true
+}
+
+function cancelEditName() {
+  editingName.value = false
+  nameForm.value = ''
+}
+
+function saveName() {
+  if (!currentCycle.value) return
+  const name = nameForm.value.trim()
+  if (!name) {
+    toast.error('周期名称不能为空')
+    return
+  }
+  cycleSummaryStore.updateCycle(currentCycle.value.id, { name })
+  toast.success('周期名称已更新')
+  editingName.value = false
+}
 
 function startEditSummary() {
   if (!currentCycle.value) return
@@ -1078,6 +1122,52 @@ async function handleDelete() {
   gap: 2px;
 }
 
+.name-item {
+  gap: 6px;
+}
+
+.btn-rename {
+  align-self: flex-start;
+  padding: 2px 8px;
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.15s;
+}
+
+.btn-rename:hover {
+  border-color: var(--color-blue);
+  color: var(--color-blue);
+  background: rgba(88,166,255,0.08);
+}
+
+.name-input {
+  width: 180px;
+  padding: 5px 10px;
+  font-size: 13px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--color-blue);
+  border-radius: 4px;
+  color: var(--text-primary);
+  outline: none;
+  box-sizing: border-box;
+}
+
+.name-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.name-actions .btn-cancel,
+.name-actions .btn-save {
+  padding: 3px 10px;
+  font-size: 11px;
+  border-radius: 4px;
+}
+
 .overview-label {
   font-size: 11px;
   color: var(--text-tertiary);
@@ -1452,12 +1542,25 @@ async function handleDelete() {
   background: var(--bg-tertiary);
   border-radius: 4px;
   border-left: 2px solid var(--color-blue);
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  max-height: 96px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(88,166,255,0.45) transparent;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.cycle-summary-text::-webkit-scrollbar {
+  width: 6px;
+}
+
+.cycle-summary-text::-webkit-scrollbar-thumb {
+  background: rgba(88,166,255,0.45);
+  border-radius: 3px;
+}
+
+.cycle-summary-text::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .btn-delete {

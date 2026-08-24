@@ -114,57 +114,6 @@
           <CyclePanel />
         </template>
 
-        <!-- 历史记录 -->
-        <template v-else-if="module.id === 'history'">
-          <div class="card history-card">
-            <div class="section-header" @click="historyCollapsed = !historyCollapsed">
-              <div class="section-title">历史记录</div>
-              <span class="collapse-icon">{{ historyCollapsed ? '▶' : '▼' }}</span>
-            </div>
-            <div v-if="!historyCollapsed">
-              <div v-if="emotionStore.sortedEmotions.length === 0" class="empty-hint">暂无数据</div>
-              <div v-else class="history-table-wrapper">
-                <table class="history-table">
-                  <thead>
-                    <tr>
-                      <th>日期</th>
-                      <th>上证</th>
-                      <th>上涨</th>
-                      <th>下跌</th>
-                      <th>涨停</th>
-                      <th>跌停</th>
-                      <th>最高板</th>
-                      <th>个股</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="e in emotionStore.sortedEmotions" :key="e.id" :class="{ today: e.date === today() }">
-                      <td class="date-col">{{ e.date.slice(5) }}</td>
-                      <td :class="e.shChange >= 0 ? 'up' : 'down'">
-                        {{ e.shChange >= 0 ? '+' : '' }}{{ (e.shChange || 0).toFixed(2) }}%
-                      </td>
-                      <td class="up">{{ e.upCount || '-' }}</td>
-                      <td class="down">{{ e.downCount || '-' }}</td>
-                      <td class="up">{{ e.limitUpCount || '-' }}</td>
-                      <td class="down">{{ e.limitDownCount || '-' }}</td>
-                      <td class="height-col" :class="{ breakthrough: hasBreakthroughInChart1(e) }">
-                        {{ e.maxBoardHeight || '-' }}板
-                        <span v-if="hasBreakthroughInChart1(e)" class="breakthrough-tag">破</span>
-                      </td>
-                      <td class="stock-col">
-                        <span v-for="(s, idx) in e.spaceBoardStocks" :key="idx" class="stock-item">
-                          {{ s.name }}({{ s.height }})
-                        </span>
-                        <span v-if="!e.spaceBoardStocks?.length">-</span>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </template>
-
         <!-- 活跃题材 -->
         <template v-else-if="module.id === 'themes'">
           <ThemeTree />
@@ -180,7 +129,6 @@ import { useThemeStore } from '@/stores/theme'
 import { useStockStore } from '@/stores/stock'
 import { useEmotionStore } from '@/stores/emotion'
 import { useReviewStore } from '@/stores/review'
-import { today } from '@/composables/useDate'
 import type { EmotionDaily } from '@/types'
 import {
   Chart as ChartJS,
@@ -230,7 +178,6 @@ const defaultModules: DashboardModule[] = [
   { id: 'stairChart2', name: '连板楼梯图2' },
   { id: 'cycle', name: '交易风格与情绪周期' },
   { id: 'charts', name: '趋势图表' },
-  { id: 'history', name: '历史记录' },
   { id: 'themes', name: '活跃题材' }
 ]
 
@@ -241,9 +188,12 @@ function loadModuleOrder() {
   if (saved) {
     try {
       const parsed = JSON.parse(saved)
-      if (Array.isArray(parsed) && parsed.length === defaultModules.length) {
-        moduleOrder.value = parsed
-        return
+      if (Array.isArray(parsed)) {
+        const filtered = parsed.filter((id: string) => defaultModules.some(m => m.id === id))
+        if (filtered.length === defaultModules.length) {
+          moduleOrder.value = filtered
+          return
+        }
       }
     } catch {}
   }
@@ -336,9 +286,6 @@ const timeRanges = [
 ]
 const selectedRange = ref(20)
 const customRange = ref<number | null>(null)
-
-// 历史记录折叠状态
-const historyCollapsed = ref(false)
 
 function applyCustomRange() {
   if (customRange.value && customRange.value >= 1 && customRange.value <= 365) {
@@ -1057,107 +1004,6 @@ watch(() => emotionStore.sortedEmotions.length, async () => {
 
 .chart-container.expanded {
   height: 280px;
-}
-
-/* 历史记录 */
-.history-card {
-  margin-bottom: 12px;
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  cursor: pointer;
-  padding-bottom: 12px;
-  user-select: none;
-}
-
-.section-header:hover .section-title {
-  color: var(--text-primary);
-}
-
-.collapse-icon {
-  font-size: 10px;
-  color: var(--text-secondary);
-  transition: transform 0.2s;
-}
-
-.history-table-wrapper {
-  overflow-x: auto;
-}
-
-.history-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-}
-
-.history-table th,
-.history-table td {
-  padding: 8px 6px;
-  text-align: center;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.history-table th {
-  color: var(--text-secondary);
-  font-weight: 500;
-  font-size: 11px;
-}
-
-.history-table tr.today {
-  background: rgba(88,166,255,0.1);
-}
-
-.history-table tr.today td {
-  font-weight: 500;
-}
-
-.date-col {
-  color: var(--text-secondary);
-}
-
-.up { color: var(--color-red); }
-.down { color: var(--color-green); }
-
-.height-col {
-  color: #f0c040;
-  font-weight: 500;
-}
-
-.height-col.breakthrough {
-  color: #f85149;
-}
-
-.breakthrough-tag {
-  display: inline-block;
-  font-size: 9px;
-  background: #f85149;
-  color: #fff;
-  padding: 1px 3px;
-  border-radius: 2px;
-  margin-left: 2px;
-}
-
-.stock-col {
-  color: var(--text-secondary);
-  max-width: 120px;
-  text-align: left !important;
-}
-
-.stock-item {
-  display: inline-block;
-  margin-right: 4px;
-  font-size: 11px;
-}
-
-.stock-item::after {
-  content: '、';
-}
-
-.stock-item:last-child::after {
-  content: '';
 }
 
 /* 题材列表 */

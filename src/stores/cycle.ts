@@ -79,6 +79,12 @@ export const useCycleStore = defineStore('cycle', () => {
     persist()
   }
 
+  function resetAll() {
+    tradeStyleHistory.value = []
+    cyclePhaseHistory.value = []
+    persist()
+  }
+
   function reload() {
     const data = loadData()
     tradeStyleHistory.value = data.tradeStyleHistory || []
@@ -98,6 +104,7 @@ export const useCycleStore = defineStore('cycle', () => {
     addCyclePhase,
     updateCyclePhase,
     deleteCyclePhase,
+    resetAll,
     reload
   }
 })
