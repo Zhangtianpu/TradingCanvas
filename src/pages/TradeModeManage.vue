@@ -100,6 +100,56 @@
       <div v-if="customCyclePhaseStore.sortedPhases.length === 0" class="empty-state">暂无情绪阶段</div>
     </div>
 
+    <!-- 个股分析标签 -->
+    <div v-if="activeTab === 'stockFlowLabels'" class="tab-content">
+      <div class="content-header">
+        <span class="content-title">个股分析</span>
+      </div>
+      <div class="stock-category-bar">
+        <button
+          v-for="cat in LABEL_CATEGORY_OPTIONS"
+          :key="cat.key"
+          class="category-btn"
+          :class="{ active: activeStockCategory === cat.key }"
+          @click="activeStockCategory = cat.key"
+        >{{ cat.label }}</button>
+      </div>
+      <div class="content-header">
+        <span class="content-title">{{ LABEL_CATEGORY_OPTIONS.find(c => c.key === activeStockCategory)?.label }}</span>
+        <button class="btn-add" @click="openStockFlowAdd(activeStockCategory)">+ 新建</button>
+      </div>
+      <div class="mode-grid">
+        <div
+          v-for="label in independentLabelStore.sortedLabels.filter(l => l.category === activeStockCategory)"
+          :key="label.id"
+          class="mode-card"
+        >
+          <div class="mode-color" :style="{ background: label.color }"></div>
+          <div class="mode-info">
+            <div class="mode-name">
+              {{ label.name }}
+              <span v-if="label.isDefault" class="default-tag">默认</span>
+            </div>
+            <div class="mode-desc" v-if="label.description">{{ label.description }}</div>
+            <div class="mode-desc empty" v-else>暂无说明</div>
+          </div>
+          <div class="mode-actions">
+            <button class="btn-edit" @click="openStockFlowEdit(label)">编辑</button>
+            <button
+              v-if="!label.isDefault"
+              class="btn-del"
+              @click="handleDelete('stockFlowLabels', label.id)"
+            >删除</button>
+            <span v-else class="lock-hint" title="默认项不可删除">🔒</span>
+          </div>
+        </div>
+      </div>
+      <div
+        v-if="independentLabelStore.sortedLabels.filter(l => l.category === activeStockCategory).length === 0"
+        class="empty-state"
+      >暂无标签</div>
+    </div>
+
     <!-- 添加/编辑弹窗 -->
     <div class="modal-overlay" v-if="showModal" @click.self="closeModal">
       <div class="modal-card">
@@ -166,26 +216,31 @@ import { ref, computed } from 'vue'
 import { useTradeModeStore } from '@/stores/tradeMode'
 import { useCustomTradeStyleStore, TRADE_STYLE_COLOR_POOL } from '@/stores/customTradeStyle'
 import { useCustomCyclePhaseStore, CYCLE_PHASE_COLOR_POOL } from '@/stores/customCyclePhase'
-import type { CustomTradeMode, CustomTradeStyle, CustomCyclePhase } from '@/types'
+import { useIndependentLabelStore, INDEPENDENT_LABEL_COLOR_POOL, LABEL_CATEGORY_OPTIONS } from '@/stores/independentLabel'
+import type { CustomTradeMode, CustomTradeStyle, CustomCyclePhase, IndependentLabel, IndependentLabelCategory } from '@/types'
 
 const tradeModeStore = useTradeModeStore()
 const customTradeStyleStore = useCustomTradeStyleStore()
 const customCyclePhaseStore = useCustomCyclePhaseStore()
+const independentLabelStore = useIndependentLabelStore()
 
-type TabKey = 'tradeMode' | 'tradeStyle' | 'cyclePhase'
+type TabKey = 'tradeMode' | 'tradeStyle' | 'cyclePhase' | 'stockFlowLabels'
 
 const tabs = [
   { key: 'tradeMode' as TabKey, label: '交易模式' },
   { key: 'tradeStyle' as TabKey, label: '交易风格' },
-  { key: 'cyclePhase' as TabKey, label: '情绪阶段' }
+  { key: 'cyclePhase' as TabKey, label: '情绪阶段' },
+  { key: 'stockFlowLabels' as TabKey, label: '个股分析' }
 ]
 
 const activeTab = ref<TabKey>('tradeMode')
+const activeStockCategory = ref<IndependentLabelCategory>('position')
 
 // 当前激活 tab 的颜色池
 const currentColorPool = computed(() => {
   if (activeTab.value === 'tradeStyle') return TRADE_STYLE_COLOR_POOL
   if (activeTab.value === 'cyclePhase') return CYCLE_PHASE_COLOR_POOL
+  if (activeTab.value === 'stockFlowLabels') return INDEPENDENT_LABEL_COLOR_POOL
   return defaultColorPresets
 })
 
@@ -208,6 +263,10 @@ const form = ref({ name: '', color: '#3fb950', description: '' })
 
 const modalTitle = computed(() => {
   const action = editingId.value ? '编辑' : '新建'
+  if (editingType.value === 'stockFlowLabels') {
+    const category = LABEL_CATEGORY_OPTIONS.find(c => c.key === activeStockCategory.value)?.label || ''
+    return `${action}${category}标签`
+  }
   const label = tabs.find(t => t.key === editingType.value)?.label || ''
   return `${action}${label}`
 })
@@ -215,6 +274,11 @@ const modalTitle = computed(() => {
 const namePlaceholder = computed(() => {
   if (editingType.value === 'tradeMode') return '如：打板、低吸'
   if (editingType.value === 'tradeStyle') return '如：趋势、连板、接力'
+  if (editingType.value === 'stockFlowLabels') {
+    if (activeStockCategory.value === 'position') return '如：龙头、补涨'
+    if (activeStockCategory.value === 'status') return '如：连板、断板反包'
+    return '如：独立、高低切'
+  }
   return '如：启动、主升、分歧、退潮'
 })
 
@@ -235,6 +299,32 @@ function openAdd(type: TabKey) {
 
 function openEdit(type: TabKey, item: CustomTradeMode | CustomTradeStyle | CustomCyclePhase) {
   editingType.value = type
+  editingId.value = item.id
+  form.value = {
+    name: item.name,
+    color: item.color,
+    description: item.description || ''
+  }
+  showModal.value = true
+}
+
+function openStockFlowAdd(category: IndependentLabelCategory) {
+  activeTab.value = 'stockFlowLabels'
+  activeStockCategory.value = category
+  editingType.value = 'stockFlowLabels'
+  editingId.value = null
+  form.value = {
+    name: '',
+    color: INDEPENDENT_LABEL_COLOR_POOL[Math.floor(Math.random() * INDEPENDENT_LABEL_COLOR_POOL.length)],
+    description: ''
+  }
+  showModal.value = true
+}
+
+function openStockFlowEdit(item: IndependentLabel) {
+  activeTab.value = 'stockFlowLabels'
+  activeStockCategory.value = item.category
+  editingType.value = 'stockFlowLabels'
   editingId.value = item.id
   form.value = {
     name: item.name,
@@ -287,6 +377,15 @@ function handleSave() {
     } else {
       customCyclePhaseStore.addPhase(payload)
     }
+  } else if (editingType.value === 'stockFlowLabels') {
+    if (editingId.value) {
+      independentLabelStore.updateLabel(editingId.value, payload)
+    } else {
+      independentLabelStore.addLabel({
+        category: activeStockCategory.value,
+        ...payload
+      })
+    }
   }
   closeModal()
 }
@@ -297,6 +396,7 @@ function handleDelete(type: TabKey, id: string) {
   if (type === 'tradeMode') tradeModeStore.deleteMode(id)
   else if (type === 'tradeStyle') customTradeStyleStore.deleteStyle(id)
   else if (type === 'cyclePhase') customCyclePhaseStore.deletePhase(id)
+  else if (type === 'stockFlowLabels') independentLabelStore.deleteLabel(id)
 }
 </script>
 
@@ -343,6 +443,35 @@ function handleDelete(type: TabKey, id: string) {
 .tab-btn.active {
   color: var(--color-blue);
   border-bottom-color: var(--color-blue);
+  font-weight: 600;
+}
+
+.stock-category-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.category-btn {
+  padding: 4px 14px;
+  font-size: 12px;
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.category-btn:hover {
+  border-color: var(--color-blue);
+  color: var(--color-blue);
+}
+
+.category-btn.active {
+  background: rgba(88,166,255,0.14);
+  border-color: var(--color-blue);
+  color: var(--color-blue);
   font-weight: 600;
 }
 

@@ -1,4 +1,4 @@
-import type { AppStorage, EmotionDaily, Theme, Stock, CustomTradeMode, CustomTradeStyle, CustomCyclePhase, AppSettings } from '@/types'
+import type { AppStorage, EmotionDaily, Theme, Stock, CustomTradeMode, CustomTradeStyle, CustomCyclePhase, AppSettings, IndependentLabel } from '@/types'
 
 const STORAGE_KEY = 'trading-canvas-data'
 const APP_VERSION = '1.0.0'
@@ -31,6 +31,34 @@ function getDefaultTradeStyles(): CustomTradeStyle[] {
   ]
 }
 
+function getDefaultIndependentLabels(): IndependentLabel[] {
+  const now = new Date().toISOString()
+  const items: Array<[string, string, string, string, string, string]> = [
+    ['il-position-leader', 'position', 'leader', '龙头', '#f0c040', '行情领涨标的'],
+    ['il-position-catchup', 'position', 'catchup', '补涨', '#58a6ff', '行情补涨标的'],
+    ['il-status-board', 'status', 'board', '连板', '#f85149', '持续连板抬升'],
+    ['il-status-breakRebound', 'status', 'breakRebound', '断板反包', '#f0883e', '断板后接反包的N字节奏'],
+    ['il-status-divergence', 'status', 'divergence', '分歧', '#a371f7', '放量分歧、资金博弈明显'],
+    ['il-status-limitRepair', 'status', 'limitRepair', '涨停修复', '#3fb950', '弱化后重新用涨停修复形态'],
+    ['il-status-avoidAlert', 'status', 'avoidAlert', '躲异动', '#d29922', '主动压低涨幅规避监管异动'],
+    ['il-status-end', 'status', 'end', '结束', '#8b949e', '本轮行情结束'],
+    ['il-fund-independent', 'fund', 'independent', '独立', '#bc8cff', '不依赖题材的独立资金逻辑'],
+    ['il-fund-theme', 'fund', 'theme', '题材', '#58a6ff', '属于题材驱动的上涨'],
+    ['il-fund-switch', 'fund', 'switch', '高低切', '#f0c040', '资金从高位切换到低位'],
+    ['il-fund-recognition', 'fund', 'recognition', '辨识度', '#f0883e', '市场辨识度高']
+  ]
+  return items.map(([id, category, key, name, color, description]) => ({
+    id,
+    category: category as IndependentLabel['category'],
+    key,
+    name,
+    color,
+    description,
+    isDefault: true,
+    createdAt: now
+  }))
+}
+
 function getDefaultCyclePhases(): CustomCyclePhase[] {
   return [
     { id: 'cp-start', key: 'start', name: '启动', color: '#3fb950', description: '情绪启动阶段', isDefault: true, createdAt: new Date().toISOString() },
@@ -53,6 +81,7 @@ function createDefaultData(): AppStorage {
     cyclePhaseHistory: [],
     cycleSummaries: [],
     independentTargets: [],
+    independentLabels: getDefaultIndependentLabels(),
     settings: getDefaultSettings(),
     appVersion: APP_VERSION,
     lastBackupDate: ''
@@ -286,6 +315,7 @@ export function generateTestData(): AppStorage {
     cyclePhaseHistory: [],
     cycleSummaries: [],
     independentTargets: [],
+    independentLabels: getDefaultIndependentLabels(),
     settings: getDefaultSettings(),
     appVersion: APP_VERSION,
     lastBackupDate: ''

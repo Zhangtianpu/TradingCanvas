@@ -3,12 +3,12 @@
     <div class="flow-header">
       <div class="flow-title">个股分析</div>
       <div class="flow-actions">
-        <span v-if="targetStore.sortedTargets.length > 0" class="flow-count">共 {{ targetStore.sortedTargets.length }} 个</span>
+        <span v-if="visibleTargets.length > 0" class="flow-count">共 {{ visibleTargets.length }} 个</span>
         <button class="btn-add" @click="openCreate">+ 添加</button>
       </div>
     </div>
 
-    <div v-if="targetStore.sortedTargets.length === 0" class="empty-hint">暂无标的</div>
+    <div v-if="visibleTargets.length === 0" class="empty-hint">暂无标的</div>
 
     <div v-else>
       <div class="timeline-axis">
@@ -18,7 +18,7 @@
       </div>
 
       <div class="target-list">
-        <div v-for="target in targetStore.sortedTargets" :key="target.id" class="target-item">
+        <div v-for="target in visibleTargets" :key="target.id" class="target-item">
           <div class="target-main">
             <div class="target-meta">
               <div class="name-line">
@@ -27,13 +27,14 @@
                 <span class="running-dot" :class="{ live: !target.endDate }"></span>
               </div>
               <div class="fund-line">
-                <span class="flow-tag" :class="`position-${target.position}`">{{ POSITION_LABELS[target.position] }}</span>
+                <span class="flow-tag meta-position" :class="`position-${target.position}`" :style="tagStyle('position', target.position)" @click.stop="openPositionEditor(target)">{{ labelName('position', target.position) }}</span>
                 <span
                   v-for="fund in target.fundTags"
                   :key="fund"
                   class="flow-tag"
                   :class="`fund-${fund}`"
-                >{{ FUND_LABELS[fund] }}</span>
+                  :style="tagStyle('fund', fund)"
+                >{{ labelName('fund', fund) }}</span>
               </div>
             </div>
 
@@ -44,8 +45,8 @@
                   :key="seg.stage.id"
                   class="lane-segment"
                   :class="`seg-${seg.stage.status}`"
-                  :style="{ left: seg.left + '%', width: seg.width + '%' }"
-                  :title="`${STATUS_LABELS[seg.stage.status]} ${seg.start} ~ ${seg.end}`"
+                  :style="{ left: seg.left + '%', width: seg.width + '%', background: labelColor('status', seg.stage.status) }"
+                  :title="`${labelName('status', seg.stage.status)} ${seg.start} ~ ${seg.end}`"
                 ></div>
               </div>
             </div>
@@ -53,13 +54,15 @@
             <div class="target-actions">
               <button class="btn-edit" @click.stop="openEdit(target)">编辑</button>
               <button v-if="!target.endDate" class="btn-finish" @click.stop="finishTarget(target)">结束</button>
+              <button v-else class="btn-restart" @click.stop="restartTarget(target)">启动</button>
+              <button class="btn-remove" @click.stop="pendingDeleteId = target.id">移除</button>
             </div>
           </div>
 
           <div class="stage-chain">
             <template v-for="(stage, idx) in getStages(target)" :key="stage.id">
               <div class="stage-node" @click.stop="openStageEditor(target, idx)">
-                <span class="stage-tag" :class="`status-${stage.status}`">{{ STATUS_LABELS[stage.status] }}</span>
+                <span class="stage-tag" :class="`status-${stage.status}`" :style="tagStyle('status', stage.status)">{{ labelName('status', stage.status) }}</span>
                 <span class="stage-date">{{ stage.date.slice(5) }} ~ {{ getStageEnd(target, idx).slice(5) }}</span>
                 <span class="stage-days">{{ countTradingDays(stage.date, getStageEnd(target, idx)) }}日</span>
               </div>
@@ -107,12 +110,13 @@
             <span class="option-label">身位</span>
             <div class="option-row">
               <button
-                v-for="(label, key) in POSITION_LABELS"
-                :key="key"
+                v-for="opt in labelOptions('position')"
+                :key="opt.value"
                 class="option-btn"
-                :class="[`pos-${key}`, { active: form.position === key }]"
-                @click="form.position = key"
-              >{{ label }}</button>
+                :class="[`pos-${opt.value}`, { active: form.position === opt.value }]"
+                :style="optionStyle('position', opt.value, form.position === opt.value)"
+                @click="form.position = opt.value"
+              >{{ opt.name }}</button>
             </div>
           </div>
 
@@ -120,12 +124,13 @@
             <span class="option-label">资金性质</span>
             <div class="option-row">
               <button
-                v-for="(label, key) in FUND_LABELS"
-                :key="key"
+                v-for="opt in labelOptions('fund')"
+                :key="opt.value"
                 class="multi-btn"
-                :class="[`fund-${key}`, { active: form.fundTags.includes(key) }]"
-                @click="toggleFund(key)"
-              >{{ label }}</button>
+                :class="[`fund-${opt.value}`, { active: form.fundTags.includes(opt.value) }]"
+                :style="optionStyle('fund', opt.value, form.fundTags.includes(opt.value))"
+                @click="toggleFund(opt.value)"
+              >{{ opt.name }}</button>
             </div>
           </div>
 
@@ -135,12 +140,7 @@
               <span class="stage-index">{{ idx + 1 }}</span>
               <input v-model="stage.date" type="date" class="text-input stage-date" />
               <select v-model="stage.status" class="text-input stage-status">
-                <option value="board">连板</option>
-                <option value="breakRebound">断板反包</option>
-                <option value="divergence">分歧</option>
-                <option value="limitRepair">涨停修复</option>
-                <option value="avoidAlert">躲异动</option>
-                <option value="end">结束</option>
+                <option v-for="opt in labelOptions('status')" :key="opt.value" :value="opt.value">{{ opt.name }}</option>
               </select>
               <button v-if="form.stages.length > 1" class="btn-link" @click="removeStage(stage.id)">删除</button>
             </div>
@@ -190,12 +190,13 @@
             <span class="option-label">状态</span>
             <div class="option-row">
               <button
-                v-for="(label, key) in STATUS_LABELS"
-                :key="key"
+                v-for="opt in labelOptions('status')"
+                :key="opt.value"
                 class="option-btn"
-                :class="[`state-${key}`, { active: stageForm.status === key }]"
-                @click="stageForm.status = key"
-              >{{ label }}</button>
+                :class="[`state-${opt.value}`, { active: stageForm.status === opt.value }]"
+                :style="optionStyle('status', opt.value, stageForm.status === opt.value)"
+                @click="stageForm.status = opt.value"
+              >{{ opt.name }}</button>
             </div>
           </div>
         </div>
@@ -203,6 +204,33 @@
           <button v-if="stageForm.id && stageModalStageCount > 1" class="btn-danger-sm" @click="deleteStageFromEditor">删除</button>
           <button class="btn-cancel" @click="closeStageEditor">取消</button>
           <button class="btn-save" @click="saveStageEditor">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="showPositionModal" class="edit-modal" @click.self="closePositionEditor">
+      <div class="modal-content stage-quick-modal">
+        <div class="modal-header">
+          <span class="modal-title">身位</span>
+        </div>
+        <div class="modal-body">
+          <div class="option-block">
+            <span class="option-label">当前标的</span>
+            <div class="option-row">
+              <button
+                v-for="opt in labelOptions('position')"
+                :key="opt.value"
+                class="option-btn"
+                :class="[`pos-${opt.value}`, { active: positionDraft === opt.value }]"
+                :style="optionStyle('position', opt.value, positionDraft === opt.value)"
+                @click="positionDraft = opt.value"
+              >{{ opt.name }}</button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel" @click="closePositionEditor">取消</button>
+          <button class="btn-save" @click="savePositionEditor">保存</button>
         </div>
       </div>
     </div>
@@ -220,6 +248,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed } from 'vue'
 import { useIndependentTargetStore } from '@/stores/independentTarget'
+import { useIndependentLabelStore } from '@/stores/independentLabel'
 import { useToast } from '@/composables/useToast'
 import { generateId } from '@/composables/useStorage'
 import { today } from '@/composables/useDate'
@@ -231,31 +260,66 @@ import type {
   IndependentFundTag,
   IndependentFlowKind,
   IndependentFlowEvent,
-  IndependentStage
+  IndependentStage,
+  IndependentLabelCategory
 } from '@/types'
 
 const targetStore = useIndependentTargetStore()
+const labelStore = useIndependentLabelStore()
 const toast = useToast()
 
-const POSITION_LABELS: Record<IndependentPosition, string> = {
-  leader: '龙头',
-  catchup: '补涨'
+const props = withDefaults(defineProps<{
+  statusFilter?: 'active' | 'ended' | 'all'
+}>(), {
+  statusFilter: 'all'
+})
+
+const visibleTargets = computed(() => {
+  if (props.statusFilter === 'active') {
+    return targetStore.sortedTargets.filter(t => !t.endDate)
+  }
+  if (props.statusFilter === 'ended') {
+    return targetStore.sortedTargets.filter(t => !!t.endDate)
+  }
+  return targetStore.sortedTargets
+})
+
+function labelOptions(category: IndependentLabelCategory) {
+  return labelStore.sortedLabels
+    .filter(l => l.category === category)
+    .map(l => ({ value: l.key, name: l.name, color: l.color }))
 }
 
-const STATUS_LABELS: Record<IndependentStatus, string> = {
-  board: '连板',
-  breakRebound: '断板反包',
-  divergence: '分歧',
-  limitRepair: '涨停修复',
-  avoidAlert: '躲异动',
-  end: '结束'
+function labelName(category: IndependentLabelCategory, key: string) {
+  return labelStore.getName(category, key)
 }
 
-const FUND_LABELS: Record<IndependentFundTag, string> = {
-  independent: '独立',
-  theme: '题材',
-  switch: '高低切',
-  recognition: '辨识度'
+function labelColor(category: IndependentLabelCategory, key: string) {
+  return labelStore.getColor(category, key)
+}
+
+function withAlpha(hex: string, alpha = 0.14): string {
+  const clean = hex.replace('#', '')
+  return '#' + clean.slice(0, 6) + Math.round(alpha * 255).toString(16).padStart(2, '0')
+}
+
+function tagStyle(category: IndependentLabelCategory, key: string) {
+  const color = labelColor(category, key)
+  return {
+    background: withAlpha(color, 0.14),
+    color,
+    borderColor: withAlpha(color, 0.3)
+  }
+}
+
+function optionStyle(category: IndependentLabelCategory, key: string, active: boolean) {
+  if (!active) return {}
+  const color = labelColor(category, key)
+  return {
+    background: withAlpha(color, 0.18),
+    borderColor: color,
+    color
+  }
 }
 
 const KIND_LABELS: Record<IndependentFlowKind, string> = {
@@ -271,6 +335,10 @@ const pendingDeleteId = ref('')
 const showStageModal = ref(false)
 const stageModalTargetId = ref('')
 const stageModalStageCount = ref(0)
+
+const showPositionModal = ref(false)
+const positionModalTargetId = ref('')
+const positionDraft = ref<IndependentPosition>('leader')
 const stageForm = reactive({
   id: '',
   date: today(),
@@ -407,6 +475,24 @@ function closeStageEditor() {
   stageForm.id = ''
 }
 
+function openPositionEditor(target: IndependentTarget) {
+  positionModalTargetId.value = target.id
+  positionDraft.value = target.position
+  showPositionModal.value = true
+}
+
+function closePositionEditor() {
+  showPositionModal.value = false
+  positionModalTargetId.value = ''
+}
+
+function savePositionEditor() {
+  if (!positionModalTargetId.value) return
+  targetStore.updateTarget(positionModalTargetId.value, { position: positionDraft.value })
+  toast.success('身位已更新')
+  closePositionEditor()
+}
+
 function saveStageEditor() {
   if (!stageModalTargetId.value) return
   if (!stageForm.date) {
@@ -501,6 +587,18 @@ function finishTarget(target: IndependentTarget) {
   toast.success('标的已结束')
 }
 
+function restartTarget(target: IndependentTarget) {
+  const stages = getStages(target)
+  const previous = [...stages].reverse().find(s => s.status !== 'end')
+  const statusOptions = labelOptions('status')
+  const fallback = statusOptions.find(s => s.value !== 'end')?.value || target.status
+  targetStore.updateTarget(target.id, {
+    status: previous?.status || fallback,
+    endDate: undefined
+  })
+  toast.success('标的已重新启动')
+}
+
 function getStages(target: IndependentTarget): IndependentStage[] {
   if (target.stages && target.stages.length > 0) {
     return [...target.stages].sort((a, b) => a.date.localeCompare(b.date))
@@ -544,7 +642,7 @@ function dateDiffDays(start: string, end: string): number {
 }
 
 const globalRange = computed(() => {
-  const targets = targetStore.targets
+  const targets = visibleTargets.value
   const starts = targets.flatMap(t => getStages(t).map(s => s.date))
   const ends = targets.map(t => t.endDate || today())
   if (starts.length === 0) {
@@ -767,6 +865,15 @@ function confirmDelete() {
   white-space: nowrap;
 }
 
+.meta-position {
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+
+.meta-position:hover {
+  filter: brightness(1.25);
+}
+
 .fund-independent { background: rgba(188,140,255,0.13); color: var(--color-purple); }
 .fund-theme { background: rgba(88,166,255,0.13); color: var(--color-blue); }
 .fund-switch { background: rgba(240,192,64,0.13); color: var(--color-gold); }
@@ -830,6 +937,36 @@ function confirmDelete() {
 
 .btn-finish:hover {
   background: rgba(240,192,64,0.12);
+}
+
+.btn-restart {
+  color: var(--color-green);
+  border-color: rgba(63,185,80,0.35);
+  padding: 3px 9px;
+  font-size: 11px;
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+  transition: all 0.15s;
+}
+
+.btn-restart:hover {
+  background: rgba(63,185,80,0.12);
+}
+
+.btn-remove {
+  color: var(--color-red);
+  border-color: rgba(248,81,73,0.35);
+  padding: 3px 9px;
+  font-size: 11px;
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+  transition: all 0.15s;
+}
+
+.btn-remove:hover {
+  background: rgba(248,81,73,0.12);
 }
 
 .stage-chain {

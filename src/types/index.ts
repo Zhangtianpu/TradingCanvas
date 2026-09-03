@@ -209,10 +209,24 @@ export interface CyclePhaseHistory {
 
 // 周期总结（保存的周期快照）
 // 独立行情标的（不以题材/涨停为主线的个股分析）
-export type IndependentPosition = 'leader' | 'catchup'
-export type IndependentStatus = 'board' | 'breakRebound' | 'divergence' | 'limitRepair' | 'avoidAlert' | 'end'
-export type IndependentFundTag = 'independent' | 'theme' | 'switch' | 'recognition'
+export type IndependentPosition = string
+export type IndependentStatus = string
+export type IndependentFundTag = string
 export type IndependentFlowKind = 'breakout' | 'rebound' | 'custom'
+
+// 个股分析标签（身位/状态/资金性质）
+export type IndependentLabelCategory = 'position' | 'status' | 'fund'
+
+export interface IndependentLabel {
+  id: string
+  category: IndependentLabelCategory
+  key: string
+  name: string
+  color: string
+  description: string
+  isDefault: boolean
+  createdAt: string
+}
 
 export interface IndependentFlowEvent {
   id: string
@@ -270,6 +284,7 @@ export interface AppStorage {
   cyclePhaseHistory: CyclePhaseHistory[]
   cycleSummaries: CycleSummary[]
   independentTargets: IndependentTarget[]
+  independentLabels: IndependentLabel[]
   settings: AppSettings
   appVersion: string
   lastBackupDate: string
