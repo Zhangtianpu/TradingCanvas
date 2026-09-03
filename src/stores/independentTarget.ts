@@ -1,17 +1,44 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { IndependentTarget, IndependentFlowEvent, IndependentStage } from '@/types'
+import type { IndependentTarget, IndependentFlowEvent, IndependentStage, IndependentPosition, IndependentStatus } from '@/types'
 import { loadData, saveData, generateId } from '@/composables/useStorage'
 
+function normalizePosition(value: string): IndependentPosition {
+  if (value === 'catchup' || value === 'low') return 'catchup'
+  return 'leader'
+}
+
+function normalizeStatus(value: string): IndependentStatus {
+  const map: Record<string, IndependentStatus> = {
+    start: 'board',
+    run: 'board',
+    flat: 'divergence',
+    weak: 'divergence',
+    end: 'end',
+    board: 'board',
+    breakRebound: 'breakRebound',
+    divergence: 'divergence',
+    limitRepair: 'limitRepair',
+    avoidAlert: 'avoidAlert'
+  }
+  return map[value] || 'board'
+}
+
 function ensureStages(target: IndependentTarget): IndependentTarget {
-  if (target.stages && target.stages.length > 0) return target
-  const stages: IndependentStage[] = [{
-    id: generateId(),
-    date: target.startDate,
-    position: target.position,
-    status: target.status
-  }]
-  return { ...target, stages }
+  const rawStages = target.stages && target.stages.length > 0
+    ? target.stages
+    : [{ id: generateId(), date: target.startDate, position: target.position, status: target.status }]
+  const stages: IndependentStage[] = rawStages.map(s => ({
+    ...s,
+    position: normalizePosition(s.position),
+    status: normalizeStatus(s.status)
+  }))
+  return {
+    ...target,
+    position: normalizePosition(target.position),
+    status: normalizeStatus(target.status),
+    stages
+  }
 }
 
 export const useIndependentTargetStore = defineStore('independentTarget', () => {

@@ -122,15 +122,15 @@
               <span class="stage-index">{{ idx + 1 }}</span>
               <input v-model="stage.date" type="date" class="text-input stage-date" />
               <select v-model="stage.position" class="text-input stage-position">
-                <option value="low">低位</option>
-                <option value="mid">中位</option>
-                <option value="high">高位</option>
+                <option value="leader">龙头</option>
+                <option value="catchup">补涨</option>
               </select>
               <select v-model="stage.status" class="text-input stage-status">
-                <option value="start">启动</option>
-                <option value="run">主升</option>
-                <option value="flat">横盘</option>
-                <option value="weak">转弱</option>
+                <option value="board">连板</option>
+                <option value="breakRebound">断板反包</option>
+                <option value="divergence">分歧</option>
+                <option value="limitRepair">涨停修复</option>
+                <option value="avoidAlert">躲异动</option>
                 <option value="end">结束</option>
               </select>
               <button v-if="form.stages.length > 1" class="btn-link" @click="removeStage(stage.id)">删除</button>
@@ -242,16 +242,16 @@ const targetStore = useIndependentTargetStore()
 const toast = useToast()
 
 const POSITION_LABELS: Record<IndependentPosition, string> = {
-  low: '低位',
-  mid: '中位',
-  high: '高位'
+  leader: '龙头',
+  catchup: '补涨'
 }
 
 const STATUS_LABELS: Record<IndependentStatus, string> = {
-  start: '启动',
-  run: '主升',
-  flat: '横盘',
-  weak: '转弱',
+  board: '连板',
+  breakRebound: '断板反包',
+  divergence: '分歧',
+  limitRepair: '涨停修复',
+  avoidAlert: '躲异动',
   end: '结束'
 }
 
@@ -278,8 +278,8 @@ const stageModalStageCount = ref(0)
 const stageForm = reactive({
   id: '',
   date: today(),
-  position: 'low' as IndependentPosition,
-  status: 'start' as IndependentStatus
+  position: 'leader' as IndependentPosition,
+  status: 'board' as IndependentStatus
 })
 
 const form = reactive({
@@ -307,8 +307,8 @@ function defaultStage(date: string): IndependentStage {
   return {
     id: generateId(),
     date,
-    position: 'low',
-    status: 'start'
+    position: 'leader',
+    status: 'board'
   }
 }
 
@@ -355,8 +355,8 @@ function addStage() {
   form.stages.push({
     id: generateId(),
     date: today(),
-    position: last?.position || 'low',
-    status: last?.status || 'start'
+    position: last?.position || 'leader',
+    status: last?.status || 'board'
   })
 }
 
@@ -402,9 +402,9 @@ function openAddStage(target: IndependentTarget) {
   stageModalTargetId.value = target.id
   stageModalStageCount.value = stages.length
   stageForm.id = ''
-  stageForm.date = last ? today() : today()
-  stageForm.position = last?.position || 'low'
-  stageForm.status = last?.status || 'start'
+  stageForm.date = today()
+  stageForm.position = last?.position || 'leader'
+  stageForm.status = last?.status || 'board'
   showStageModal.value = true
 }
 
@@ -781,10 +781,11 @@ function confirmDelete() {
   min-width: 2px;
 }
 
-.seg-start { background: rgba(63,185,80,0.75); }
-.seg-run { background: rgba(248,81,73,0.78); }
-.seg-flat { background: rgba(240,192,64,0.78); }
-.seg-weak { background: rgba(188,140,255,0.75); }
+.seg-board { background: rgba(248,81,73,0.78); }
+.seg-breakRebound { background: rgba(240,136,62,0.78); }
+.seg-divergence { background: rgba(188,140,255,0.75); }
+.seg-limitRepair { background: rgba(63,185,80,0.75); }
+.seg-avoidAlert { background: rgba(240,192,64,0.78); }
 .seg-end { background: rgba(139,148,158,0.7); }
 
 .target-actions {
@@ -874,14 +875,14 @@ function confirmDelete() {
   border-radius: 3px;
 }
 
-.position-low { background: rgba(88,166,255,0.14); color: var(--color-blue); }
-.position-mid { background: rgba(240,192,64,0.14); color: var(--color-gold); }
-.position-high { background: rgba(248,81,73,0.14); color: var(--color-red); }
+.position-leader { background: rgba(240,192,64,0.14); color: var(--color-gold); }
+.position-catchup { background: rgba(88,166,255,0.14); color: var(--color-blue); }
 
-.status-start { background: rgba(63,185,80,0.14); color: var(--color-green); }
-.status-run { background: rgba(248,81,73,0.14); color: var(--color-red); }
-.status-flat { background: rgba(240,192,64,0.14); color: var(--color-gold); }
-.status-weak { background: rgba(188,140,255,0.14); color: var(--color-purple); }
+.status-board { background: rgba(248,81,73,0.14); color: var(--color-red); }
+.status-breakRebound { background: rgba(240,136,62,0.14); color: var(--color-orange); }
+.status-divergence { background: rgba(188,140,255,0.14); color: var(--color-purple); }
+.status-limitRepair { background: rgba(63,185,80,0.14); color: var(--color-green); }
+.status-avoidAlert { background: rgba(240,192,64,0.14); color: var(--color-gold); }
 .status-end { background: rgba(139,148,158,0.14); color: var(--text-secondary); }
 
 .stage-date {
@@ -1054,14 +1055,14 @@ function confirmDelete() {
   color: var(--text-primary);
 }
 
-.pos-low.active { background: rgba(88,166,255,0.18); border-color: var(--color-blue); color: var(--color-blue); }
-.pos-mid.active { background: rgba(240,192,64,0.18); border-color: var(--color-gold); color: var(--color-gold); }
-.pos-high.active { background: rgba(248,81,73,0.18); border-color: var(--color-red); color: var(--color-red); }
+.pos-leader.active { background: rgba(240,192,64,0.18); border-color: var(--color-gold); color: var(--color-gold); }
+.pos-catchup.active { background: rgba(88,166,255,0.18); border-color: var(--color-blue); color: var(--color-blue); }
 
-.state-start.active { background: rgba(63,185,80,0.18); border-color: var(--color-green); color: var(--color-green); }
-.state-run.active { background: rgba(248,81,73,0.18); border-color: var(--color-red); color: var(--color-red); }
-.state-flat.active { background: rgba(240,192,64,0.18); border-color: var(--color-gold); color: var(--color-gold); }
-.state-weak.active { background: rgba(188,140,255,0.18); border-color: var(--color-purple); color: var(--color-purple); }
+.state-board.active { background: rgba(248,81,73,0.18); border-color: var(--color-red); color: var(--color-red); }
+.state-breakRebound.active { background: rgba(240,136,62,0.18); border-color: var(--color-orange); color: var(--color-orange); }
+.state-divergence.active { background: rgba(188,140,255,0.18); border-color: var(--color-purple); color: var(--color-purple); }
+.state-limitRepair.active { background: rgba(63,185,80,0.18); border-color: var(--color-green); color: var(--color-green); }
+.state-avoidAlert.active { background: rgba(240,192,64,0.18); border-color: var(--color-gold); color: var(--color-gold); }
 .state-end.active { background: rgba(139,148,158,0.18); border-color: var(--text-secondary); color: var(--text-secondary); }
 
 .multi-btn {

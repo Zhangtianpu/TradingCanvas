@@ -209,8 +209,8 @@ export interface CyclePhaseHistory {
 
 // 周期总结（保存的周期快照）
 // 独立行情标的（不以题材/涨停为主线的个股分析）
-export type IndependentPosition = 'low' | 'mid' | 'high'
-export type IndependentStatus = 'start' | 'run' | 'flat' | 'weak' | 'end'
+export type IndependentPosition = 'leader' | 'catchup'
+export type IndependentStatus = 'board' | 'breakRebound' | 'divergence' | 'limitRepair' | 'avoidAlert' | 'end'
 export type IndependentFundTag = 'independent' | 'theme' | 'switch' | 'recognition'
 export type IndependentFlowKind = 'breakout' | 'rebound' | 'custom'
 
