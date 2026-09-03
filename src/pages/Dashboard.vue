@@ -109,6 +109,11 @@
           </div>
         </template>
 
+        <!-- 个股分析 -->
+        <template v-else-if="module.id === 'stockFlow'">
+          <StockFlowPanel />
+        </template>
+
         <!-- 交易风格与情绪周期 -->
         <template v-else-if="module.id === 'cycle'">
           <CyclePanel />
@@ -145,6 +150,7 @@ import {
 import StairChart from '@/components/StairChart.vue'
 import ThemeTree from '@/components/ThemeTree.vue'
 import CyclePanel from '@/components/CyclePanel.vue'
+import StockFlowPanel from '@/components/StockFlowPanel.vue'
 import PositionCard from '@/components/PositionCard.vue'
 
 // 注册Chart.js组件
@@ -176,6 +182,7 @@ const defaultModules: DashboardModule[] = [
   { id: 'positions', name: '持仓概览' },
   { id: 'stairChart', name: '连板楼梯图' },
   { id: 'stairChart2', name: '连板楼梯图2' },
+  { id: 'stockFlow', name: '个股分析' },
   { id: 'cycle', name: '交易风格与情绪周期' },
   { id: 'charts', name: '趋势图表' },
   { id: 'themes', name: '活跃题材' }

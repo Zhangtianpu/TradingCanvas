@@ -52,6 +52,7 @@ function createDefaultData(): AppStorage {
     tradeStyleHistory: [],
     cyclePhaseHistory: [],
     cycleSummaries: [],
+    independentTargets: [],
     settings: getDefaultSettings(),
     appVersion: APP_VERSION,
     lastBackupDate: ''
@@ -284,6 +285,7 @@ export function generateTestData(): AppStorage {
     tradeStyleHistory: [],
     cyclePhaseHistory: [],
     cycleSummaries: [],
+    independentTargets: [],
     settings: getDefaultSettings(),
     appVersion: APP_VERSION,
     lastBackupDate: ''

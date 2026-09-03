@@ -208,6 +208,41 @@ export interface CyclePhaseHistory {
 }
 
 // 周期总结（保存的周期快照）
+// 独立行情标的（不以题材/涨停为主线的个股分析）
+export type IndependentPosition = 'low' | 'mid' | 'high'
+export type IndependentStatus = 'start' | 'run' | 'flat' | 'weak' | 'end'
+export type IndependentFundTag = 'independent' | 'theme' | 'switch' | 'recognition'
+export type IndependentFlowKind = 'breakout' | 'rebound' | 'custom'
+
+export interface IndependentFlowEvent {
+  id: string
+  date: string
+  kind: IndependentFlowKind
+  content: string
+}
+
+export interface IndependentStage {
+  id: string
+  date: string
+  position: IndependentPosition
+  status: IndependentStatus
+}
+
+export interface IndependentTarget {
+  id: string
+  name: string
+  code?: string
+  position: IndependentPosition
+  status: IndependentStatus
+  fundTags: IndependentFundTag[]
+  startDate: string
+  endDate?: string
+  events: IndependentFlowEvent[]
+  stages?: IndependentStage[]
+  createdAt: string
+  updatedAt: string
+}
+
 export interface CycleSummary {
   id: string
   name: string                 // 周期名称，如"周期1"
@@ -235,6 +270,7 @@ export interface AppStorage {
   tradeStyleHistory: TradeStyleHistory[]
   cyclePhaseHistory: CyclePhaseHistory[]
   cycleSummaries: CycleSummary[]
+  independentTargets: IndependentTarget[]
   settings: AppSettings
   appVersion: string
   lastBackupDate: string
