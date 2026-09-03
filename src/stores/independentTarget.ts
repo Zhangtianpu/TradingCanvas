@@ -24,15 +24,17 @@ function normalizeStatus(value: string): IndependentStatus {
   return map[value] || 'board'
 }
 
-function ensureStages(target: IndependentTarget): IndependentTarget {
-  const rawStages = target.stages && target.stages.length > 0
-    ? target.stages
-    : [{ id: generateId(), date: target.startDate, position: target.position, status: target.status }]
-  const stages: IndependentStage[] = rawStages.map(s => ({
-    ...s,
-    position: normalizePosition(s.position),
-    status: normalizeStatus(s.status)
-  }))
+type TargetInput = Omit<IndependentTarget, 'id' | 'createdAt' | 'updatedAt'>
+
+function migrateTarget(target: TargetInput): TargetInput {
+  const rawStages = target.stages && target.stages.length > 0 ? target.stages : []
+  const stages: IndependentStage[] = rawStages.length > 0
+    ? rawStages.map(s => ({
+        id: s.id,
+        date: s.date,
+        status: normalizeStatus((s as any).status)
+      }))
+    : [{ id: generateId(), date: target.startDate, status: normalizeStatus(target.status) }]
   return {
     ...target,
     position: normalizePosition(target.position),
@@ -43,7 +45,7 @@ function ensureStages(target: IndependentTarget): IndependentTarget {
 
 export const useIndependentTargetStore = defineStore('independentTarget', () => {
   const rawTargets = loadData().independentTargets || []
-  const targets = ref<IndependentTarget[]>(rawTargets.map(ensureStages))
+  const targets = ref<IndependentTarget[]>(rawTargets.map(t => migrateTarget(t) as IndependentTarget))
 
   function persist() {
     const data = loadData()
@@ -60,9 +62,9 @@ export const useIndependentTargetStore = defineStore('independentTarget', () => 
     })
   })
 
-  type TargetInput = Omit<IndependentTarget, 'id' | 'createdAt' | 'updatedAt'>
+  
 
-function syncStageFields(target: TargetInput): TargetInput {
+  function syncStageFields(target: TargetInput): TargetInput {
     const stages = [...(target.stages || [])].sort((a, b) => a.date.localeCompare(b.date))
     if (stages.length === 0) return target
     const first = stages[0]
@@ -71,7 +73,7 @@ function syncStageFields(target: TargetInput): TargetInput {
       ...target,
       stages,
       startDate: first.date,
-      position: last.position,
+      position: target.position,
       status: last.status,
       endDate: target.endDate || undefined
     }
@@ -79,15 +81,13 @@ function syncStageFields(target: TargetInput): TargetInput {
 
   function createTarget(target: Omit<IndependentTarget, 'id' | 'createdAt' | 'updatedAt'>) {
     const now = new Date().toISOString()
-    const normalized = syncStageFields({
+    const migrated = migrateTarget({
       ...target,
-      stages: target.stages && target.stages.length > 0 ? target.stages : [{
-        id: generateId(),
-        date: target.startDate,
-        position: target.position,
-        status: target.status
-      }]
+      stages: target.stages && target.stages.length > 0
+        ? target.stages
+        : [{ id: generateId(), date: target.startDate, status: target.status }]
     })
+    const normalized = syncStageFields(migrated)
     const item: IndependentTarget = {
       ...normalized,
       id: generateId(),
@@ -103,11 +103,12 @@ function syncStageFields(target: TargetInput): TargetInput {
     const idx = targets.value.findIndex(t => t.id === id)
     if (idx !== -1) {
       const existing = targets.value[idx]
-      const merged = syncStageFields({
+      const migrated = migrateTarget({
         ...existing,
         ...updates,
         stages: updates.stages || existing.stages || []
       })
+      const merged = syncStageFields(migrated)
       targets.value[idx] = {
         ...existing,
         ...merged,

@@ -27,6 +27,7 @@
                 <span class="running-dot" :class="{ live: !target.endDate }"></span>
               </div>
               <div class="fund-line">
+                <span class="flow-tag" :class="`position-${target.position}`">{{ POSITION_LABELS[target.position] }}</span>
                 <span
                   v-for="fund in target.fundTags"
                   :key="fund"
@@ -44,7 +45,7 @@
                   class="lane-segment"
                   :class="`seg-${seg.stage.status}`"
                   :style="{ left: seg.left + '%', width: seg.width + '%' }"
-                  :title="`${POSITION_LABELS[seg.stage.position]} · ${STATUS_LABELS[seg.stage.status]} ${seg.start} ~ ${seg.end}`"
+                  :title="`${STATUS_LABELS[seg.stage.status]} ${seg.start} ~ ${seg.end}`"
                 ></div>
               </div>
             </div>
@@ -58,7 +59,6 @@
           <div class="stage-chain">
             <template v-for="(stage, idx) in getStages(target)" :key="stage.id">
               <div class="stage-node" @click.stop="openStageEditor(target, idx)">
-                <span class="stage-tag" :class="`position-${stage.position}`">{{ POSITION_LABELS[stage.position] }}</span>
                 <span class="stage-tag" :class="`status-${stage.status}`">{{ STATUS_LABELS[stage.status] }}</span>
                 <span class="stage-date">{{ stage.date.slice(5) }} ~ {{ getStageEnd(target, idx).slice(5) }}</span>
                 <span class="stage-days">{{ countTradingDays(stage.date, getStageEnd(target, idx)) }}日</span>
@@ -104,6 +104,19 @@
           </div>
 
           <div class="option-block">
+            <span class="option-label">身位</span>
+            <div class="option-row">
+              <button
+                v-for="(label, key) in POSITION_LABELS"
+                :key="key"
+                class="option-btn"
+                :class="[`pos-${key}`, { active: form.position === key }]"
+                @click="form.position = key"
+              >{{ label }}</button>
+            </div>
+          </div>
+
+          <div class="option-block">
             <span class="option-label">资金性质</span>
             <div class="option-row">
               <button
@@ -121,10 +134,6 @@
             <div v-for="(stage, idx) in form.stages" :key="stage.id" class="stage-form-row">
               <span class="stage-index">{{ idx + 1 }}</span>
               <input v-model="stage.date" type="date" class="text-input stage-date" />
-              <select v-model="stage.position" class="text-input stage-position">
-                <option value="leader">龙头</option>
-                <option value="catchup">补涨</option>
-              </select>
               <select v-model="stage.status" class="text-input stage-status">
                 <option value="board">连板</option>
                 <option value="breakRebound">断板反包</option>
@@ -176,19 +185,6 @@
         <div class="modal-body">
           <label class="input-label">开始日期</label>
           <input v-model="stageForm.date" type="date" class="text-input" />
-
-          <div class="option-block">
-            <span class="option-label">身位</span>
-            <div class="option-row">
-              <button
-                v-for="(label, key) in POSITION_LABELS"
-                :key="key"
-                class="option-btn"
-                :class="[`pos-${key}`, { active: stageForm.position === key }]"
-                @click="stageForm.position = key"
-              >{{ label }}</button>
-            </div>
-          </div>
 
           <div class="option-block">
             <span class="option-label">状态</span>
@@ -278,13 +274,13 @@ const stageModalStageCount = ref(0)
 const stageForm = reactive({
   id: '',
   date: today(),
-  position: 'leader' as IndependentPosition,
   status: 'board' as IndependentStatus
 })
 
 const form = reactive({
   name: '',
   code: '',
+  position: 'leader' as IndependentPosition,
   endDate: '',
   fundTags: [] as IndependentFundTag[],
   stages: [] as IndependentStage[],
@@ -307,7 +303,6 @@ function defaultStage(date: string): IndependentStage {
   return {
     id: generateId(),
     date,
-    position: 'leader',
     status: 'board'
   }
 }
@@ -316,6 +311,7 @@ function openCreate() {
   editingId.value = ''
   form.name = ''
   form.code = ''
+  form.position = 'leader'
   form.endDate = ''
   form.fundTags = []
   form.stages = [defaultStage(today())]
@@ -328,6 +324,7 @@ function openEdit(target: IndependentTarget) {
   editingId.value = target.id
   form.name = target.name
   form.code = target.code || ''
+  form.position = target.position
   form.endDate = target.endDate || ''
   form.fundTags = [...target.fundTags]
   form.stages = getStages(target).map(s => ({ ...s }))
@@ -355,7 +352,6 @@ function addStage() {
   form.stages.push({
     id: generateId(),
     date: today(),
-    position: last?.position || 'leader',
     status: last?.status || 'board'
   })
 }
@@ -391,7 +387,6 @@ function openStageEditor(target: IndependentTarget, idx: number) {
   stageModalStageCount.value = stages.length
   stageForm.id = stage.id
   stageForm.date = stage.date
-  stageForm.position = stage.position
   stageForm.status = stage.status
   showStageModal.value = true
 }
@@ -403,7 +398,6 @@ function openAddStage(target: IndependentTarget) {
   stageModalStageCount.value = stages.length
   stageForm.id = ''
   stageForm.date = today()
-  stageForm.position = last?.position || 'leader'
   stageForm.status = last?.status || 'board'
   showStageModal.value = true
 }
@@ -425,7 +419,6 @@ function saveStageEditor() {
   const stage: IndependentStage = {
     id: stageForm.id || generateId(),
     date: stageForm.date,
-    position: stageForm.position,
     status: stageForm.status
   }
   if (stageForm.id) {
@@ -433,6 +426,13 @@ function saveStageEditor() {
     if (idx !== -1) stages[idx] = stage
   } else {
     stages.push(stage)
+  }
+  const sortedDraft = [...stages].sort((a, b) => a.date.localeCompare(b.date))
+  for (let i = 1; i < sortedDraft.length; i++) {
+    if (sortedDraft[i].date <= sortedDraft[i - 1].date) {
+      toast.error('阶段日期不能重叠，后一阶段需从下一日开始')
+      return
+    }
   }
   targetStore.updateTarget(target.id, { stages })
   toast.success(stageForm.id ? '阶段已更新' : '阶段已添加')
@@ -464,13 +464,19 @@ function saveTarget() {
     toast.error('结束日期不能早于开始日期')
     return
   }
+  for (let i = 1; i < sortedStages.length; i++) {
+    if (sortedStages[i].date <= sortedStages[i - 1].date) {
+      toast.error('阶段日期不能重叠，后一阶段需从下一日开始')
+      return
+    }
+  }
   const first = sortedStages[0]
   const last = sortedStages[sortedStages.length - 1]
   const payload = {
     name,
     code: form.code.trim() || undefined,
+    position: form.position,
     startDate: first.date,
-    position: last.position,
     status: last.status,
     endDate: form.endDate || undefined,
     fundTags: [...form.fundTags],
@@ -502,14 +508,20 @@ function getStages(target: IndependentTarget): IndependentStage[] {
   return [{
     id: target.id + '-stage',
     date: target.startDate,
-    position: target.position,
     status: target.status
   }]
 }
 
+function addDays(date: string, delta: number): string {
+  return new Date(new Date(date).getTime() + delta * 86400000).toISOString().slice(0, 10)
+}
+
 function getStageEnd(target: IndependentTarget, idx: number): string {
   const stages = getStages(target)
-  if (idx < stages.length - 1) return stages[idx + 1].date
+  if (idx < stages.length - 1) {
+    const end = addDays(stages[idx + 1].date, -1)
+    return end < stages[idx].date ? stages[idx].date : end
+  }
   return target.endDate || today()
 }
 
@@ -749,8 +761,8 @@ function confirmDelete() {
 }
 
 .flow-tag {
-  font-size: 10px;
-  padding: 1px 7px;
+  font-size: 12px;
+  padding: 0 7px;
   border-radius: 3px;
   white-space: nowrap;
 }
@@ -832,8 +844,8 @@ function confirmDelete() {
 .stage-node {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
+  gap: 4px;
+  padding: 2px 7px;
   border: 1px solid var(--border-color);
   border-radius: 4px;
   background: var(--bg-tertiary);
@@ -870,8 +882,8 @@ function confirmDelete() {
 }
 
 .stage-tag {
-  font-size: 10px;
-  padding: 1px 6px;
+  font-size: 12px;
+  padding: 0 6px;
   border-radius: 3px;
 }
 
@@ -886,13 +898,13 @@ function confirmDelete() {
 .status-end { background: rgba(139,148,158,0.14); color: var(--text-secondary); }
 
 .stage-date {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-tertiary);
   white-space: nowrap;
 }
 
 .stage-days {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--color-blue);
   font-weight: 500;
   white-space: nowrap;
@@ -900,7 +912,7 @@ function confirmDelete() {
 
 .stage-arrow {
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .flow-events {
@@ -915,9 +927,9 @@ function confirmDelete() {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 2px 7px;
+  padding: 1px 7px;
   border-radius: 3px;
-  font-size: 10px;
+  font-size: 11px;
   border: 1px solid var(--border-color);
   color: var(--text-secondary);
 }

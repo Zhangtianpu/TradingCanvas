@@ -224,7 +224,6 @@ export interface IndependentFlowEvent {
 export interface IndependentStage {
   id: string
   date: string
-  position: IndependentPosition
   status: IndependentStatus
 }
 
