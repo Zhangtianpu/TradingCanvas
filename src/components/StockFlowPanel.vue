@@ -136,13 +136,16 @@
 
           <div class="option-block">
             <span class="option-label">行情阶段</span>
-            <div v-for="(stage, idx) in form.stages" :key="stage.id" class="stage-form-row">
-              <span class="stage-index">{{ idx + 1 }}</span>
-              <input v-model="stage.date" type="date" class="text-input stage-date" />
-              <select v-model="stage.status" class="text-input stage-status">
-                <option v-for="opt in labelOptions('status')" :key="opt.value" :value="opt.value">{{ opt.name }}</option>
-              </select>
-              <button v-if="form.stages.length > 1" class="btn-link" @click="removeStage(stage.id)">删除</button>
+            <div v-for="(stage, idx) in form.stages" :key="stage.id">
+              <button v-if="idx > 0" class="stage-insert-between" @click="insertStageAfter(idx - 1)">＋ 在此之间插入</button>
+              <div class="stage-form-row">
+                <span class="stage-index">{{ idx + 1 }}</span>
+                <input v-model="stage.date" type="date" class="text-input stage-date" />
+                <select v-model="stage.status" class="text-input stage-status">
+                  <option v-for="opt in labelOptions('status')" :key="opt.value" :value="opt.value">{{ opt.name }}</option>
+                </select>
+                <button v-if="form.stages.length > 1" class="btn-link" @click="removeStage(stage.id)">删除</button>
+              </div>
             </div>
             <button class="btn-add-stage" @click="addStage">+ 添加阶段</button>
           </div>
@@ -422,6 +425,22 @@ function addStage() {
     date: today(),
     status: last?.status || 'board'
   })
+}
+
+function insertStageAfter(index: number) {
+  if (index < 0 || index >= form.stages.length) return
+  const prev = form.stages[index]
+  const next = form.stages[index + 1]
+  const fallbackStatus = labelOptions('status')[0]?.value || prev.status || 'board'
+  const insertDate = next ? next.date : prev ? addDays(prev.date, 1) : today()
+  const newStage: IndependentStage = {
+    id: generateId(),
+    date: insertDate,
+    status: prev.status || fallbackStatus
+  }
+  const shifted = form.stages.map((s, i) => i > index ? { ...s, date: addDays(s.date, 1) } : s)
+  shifted.splice(index + 1, 0, newStage)
+  form.stages = shifted
 }
 
 function removeStage(id: string) {
@@ -1233,6 +1252,23 @@ function confirmDelete() {
 .fund-theme.active { background: rgba(88,166,255,0.18); border-color: var(--color-blue); color: var(--color-blue); }
 .fund-switch.active { background: rgba(240,192,64,0.18); border-color: var(--color-gold); color: var(--color-gold); }
 .fund-recognition.active { background: rgba(240,136,62,0.18); border-color: var(--color-orange); color: var(--color-orange); }
+
+.stage-insert-between {
+  display: block;
+  width: 100%;
+  margin: 4px 0;
+  padding: 3px 8px;
+  font-size: 10px;
+  color: var(--color-blue);
+  background: rgba(88,166,255,0.06);
+  border: 1px dashed rgba(88,166,255,0.3);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.stage-insert-between:hover {
+  background: rgba(88,166,255,0.12);
+}
 
 .stage-form-row {
   display: flex;
