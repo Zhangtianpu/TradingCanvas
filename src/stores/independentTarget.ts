@@ -5,7 +5,8 @@ import { loadData, saveData, generateId } from '@/composables/useStorage'
 
 function normalizePosition(value: string): IndependentPosition {
   if (value === 'catchup' || value === 'low') return 'catchup'
-  return 'leader'
+  if (value === 'leader' || value === 'mid' || value === 'high') return 'leader'
+  return value
 }
 
 function normalizeStatus(value: string): IndependentStatus {
@@ -21,7 +22,7 @@ function normalizeStatus(value: string): IndependentStatus {
     limitRepair: 'limitRepair',
     avoidAlert: 'avoidAlert'
   }
-  return map[value] || 'board'
+  return map[value] ?? value
 }
 
 type TargetInput = Omit<IndependentTarget, 'id' | 'createdAt' | 'updatedAt'>
