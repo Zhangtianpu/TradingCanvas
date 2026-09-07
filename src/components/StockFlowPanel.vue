@@ -55,7 +55,8 @@
               <button class="btn-edit" @click.stop="openEdit(target)">编辑</button>
               <button v-if="!target.endDate" class="btn-finish" @click.stop="finishTarget(target)">结束</button>
               <button v-else class="btn-restart" @click.stop="restartTarget(target)">启动</button>
-              <button class="btn-remove" @click.stop="pendingDeleteId = target.id">移除</button>
+              <button v-if="!props.embedded" class="btn-remove" @click.stop="removeFromDashboard(target)">移除</button>
+              <button v-else-if="target.hiddenFromDashboard" class="btn-restore" @click.stop="restoreToDashboard(target)">加回看板</button>
             </div>
           </div>
 
@@ -273,18 +274,24 @@ const toast = useToast()
 
 const props = withDefaults(defineProps<{
   statusFilter?: 'active' | 'ended' | 'all'
+  embedded?: boolean
 }>(), {
-  statusFilter: 'all'
+  statusFilter: 'all',
+  embedded: false
 })
 
 const visibleTargets = computed(() => {
+  let list = targetStore.sortedTargets
+  if (!props.embedded) {
+    list = list.filter(t => !t.hiddenFromDashboard)
+  }
   if (props.statusFilter === 'active') {
-    return targetStore.sortedTargets.filter(t => !t.endDate)
+    return list.filter(t => !t.endDate)
   }
   if (props.statusFilter === 'ended') {
-    return targetStore.sortedTargets.filter(t => !!t.endDate)
+    return list.filter(t => !!t.endDate)
   }
-  return targetStore.sortedTargets
+  return list
 })
 
 function labelOptions(category: IndependentLabelCategory) {
@@ -616,6 +623,16 @@ function restartTarget(target: IndependentTarget) {
     endDate: undefined
   })
   toast.success('标的已重新启动')
+}
+
+function removeFromDashboard(target: IndependentTarget) {
+  targetStore.updateTarget(target.id, { hiddenFromDashboard: true })
+  toast.success('已从看板移除')
+}
+
+function restoreToDashboard(target: IndependentTarget) {
+  targetStore.updateTarget(target.id, { hiddenFromDashboard: false })
+  toast.success('已加入看板')
 }
 
 function getStages(target: IndependentTarget): IndependentStage[] {
@@ -971,6 +988,21 @@ function confirmDelete() {
 
 .btn-restart:hover {
   background: rgba(63,185,80,0.12);
+}
+
+.btn-restore {
+  color: var(--color-blue);
+  border-color: rgba(88,166,255,0.4);
+  padding: 3px 9px;
+  font-size: 11px;
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+  transition: all 0.15s;
+}
+
+.btn-restore:hover {
+  background: rgba(88,166,255,0.12);
 }
 
 .btn-remove {

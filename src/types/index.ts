@@ -252,6 +252,7 @@ export interface IndependentTarget {
   endDate?: string
   events: IndependentFlowEvent[]
   stages?: IndependentStage[]
+  hiddenFromDashboard?: boolean
   createdAt: string
   updatedAt: string
 }

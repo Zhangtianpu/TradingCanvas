@@ -78,7 +78,7 @@
           @click="independentStatus = 'all'"
         >全部 <span class="tab-count">{{ targetStore.targets.length }}</span></button>
       </div>
-      <StockFlowPanel :status-filter="independentStatus" />
+      <StockFlowPanel :status-filter="independentStatus" :embedded="true" />
     </template>
   </div>
 </template>
