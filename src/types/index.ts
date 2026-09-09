@@ -215,7 +215,7 @@ export type IndependentFundTag = string
 export type IndependentFlowKind = 'breakout' | 'rebound' | 'custom'
 
 // 个股分析标签（身位/状态/资金性质）
-export type IndependentLabelCategory = 'position' | 'status' | 'fund'
+export type IndependentLabelCategory = 'position' | 'status' | 'fund' | 'stair'
 
 export interface IndependentLabel {
   id: string
@@ -223,6 +223,7 @@ export interface IndependentLabel {
   key: string
   name: string
   color: string
+  badge?: string
   description: string
   isDefault: boolean
   createdAt: string

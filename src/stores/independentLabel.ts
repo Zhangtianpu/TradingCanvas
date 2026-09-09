@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { IndependentLabel, IndependentLabelCategory } from '@/types'
-import { loadData, saveData, generateId } from '@/composables/useStorage'
+import { loadData, saveData, generateId, getDefaultIndependentLabels } from '@/composables/useStorage'
 
 export const INDEPENDENT_LABEL_COLOR_POOL = [
   '#f85149', '#3fb950', '#58a6ff', '#f0c040', '#a371f7',
@@ -12,15 +12,31 @@ export const INDEPENDENT_LABEL_COLOR_POOL = [
 export const LABEL_CATEGORY_OPTIONS: Array<{ key: IndependentLabelCategory; label: string }> = [
   { key: 'position', label: '身位' },
   { key: 'status', label: '状态' },
-  { key: 'fund', label: '资金性质' }
+  { key: 'fund', label: '资金性质' },
+  { key: 'stair', label: '天梯图' }
 ]
+
+function mergeDefaultLabels(stored: IndependentLabel[]): IndependentLabel[] {
+  const defaults = getDefaultIndependentLabels()
+  const merged = stored.map(item => {
+    const def = defaults.find(d => d.category === item.category && d.key === item.key)
+    if (def && !item.badge) return { ...item, badge: def.badge }
+    return item
+  })
+  for (const def of defaults) {
+    if (!merged.some(item => item.category === def.category && item.key === def.key)) {
+      merged.push({ ...def })
+    }
+  }
+  return merged
+}
 
 function categoryLabel(category: IndependentLabelCategory): string {
   return LABEL_CATEGORY_OPTIONS.find(c => c.key === category)?.label || category
 }
 
 export const useIndependentLabelStore = defineStore('independentLabel', () => {
-  const labels = ref<IndependentLabel[]>(loadData().independentLabels || [])
+  const labels = ref<IndependentLabel[]>(mergeDefaultLabels(loadData().independentLabels || []))
 
   function persist() {
     const data = loadData()
@@ -29,7 +45,7 @@ export const useIndependentLabelStore = defineStore('independentLabel', () => {
   }
 
   const sortedLabels = computed(() => {
-    const order: IndependentLabelCategory[] = ['position', 'status', 'fund']
+    const order: IndependentLabelCategory[] = ['position', 'status', 'fund', 'stair']
     return [...labels.value].sort((a, b) => {
       const diff = order.indexOf(a.category) - order.indexOf(b.category)
       if (diff !== 0) return diff
@@ -63,7 +79,7 @@ export const useIndependentLabelStore = defineStore('independentLabel', () => {
     return INDEPENDENT_LABEL_COLOR_POOL[Math.floor(Math.random() * INDEPENDENT_LABEL_COLOR_POOL.length)]
   }
 
-  function addLabel(payload: { category: IndependentLabelCategory; name: string; color?: string; description?: string }) {
+  function addLabel(payload: { category: IndependentLabelCategory; name: string; color?: string; badge?: string; description?: string }) {
     const now = new Date().toISOString()
     const label: IndependentLabel = {
       id: generateId(),
@@ -71,6 +87,7 @@ export const useIndependentLabelStore = defineStore('independentLabel', () => {
       key: payload.category + '_' + Date.now(),
       name: payload.name,
       color: payload.color || randomColor(),
+      badge: payload.badge || undefined,
       description: payload.description || '',
       isDefault: false,
       createdAt: now

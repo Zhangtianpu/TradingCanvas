@@ -31,7 +31,7 @@ function getDefaultTradeStyles(): CustomTradeStyle[] {
   ]
 }
 
-function getDefaultIndependentLabels(): IndependentLabel[] {
+export function getDefaultIndependentLabels(): IndependentLabel[] {
   const now = new Date().toISOString()
   const items: Array<[string, string, string, string, string, string]> = [
     ['il-position-leader', 'position', 'leader', '龙头', '#f0c040', '行情领涨标的'],
@@ -47,7 +47,7 @@ function getDefaultIndependentLabels(): IndependentLabel[] {
     ['il-fund-switch', 'fund', 'switch', '高低切', '#f0c040', '资金从高位切换到低位'],
     ['il-fund-recognition', 'fund', 'recognition', '辨识度', '#f0883e', '市场辨识度高']
   ]
-  return items.map(([id, category, key, name, color, description]) => ({
+  const regular = items.map(([id, category, key, name, color, description]) => ({
     id,
     category: category as IndependentLabel['category'],
     key,
@@ -57,6 +57,18 @@ function getDefaultIndependentLabels(): IndependentLabel[] {
     isDefault: true,
     createdAt: now
   }))
+  const stairLabels: IndependentLabel[] = [
+    { id: 'il-stair-breakthrough', category: 'stair', key: 'isBreakthrough', name: '高度突破', color: '#f85149', badge: '突', description: '空间高度突破前期高点', isDefault: true, createdAt: now },
+    { id: 'il-stair-median', category: 'stair', key: 'isMedian', name: '中位标记', color: '#f0c040', badge: '中', description: '处于中位高度', isDefault: true, createdAt: now },
+    { id: 'il-stair-ice', category: 'stair', key: 'isIcePoint', name: '冰点', color: '#58a6ff', badge: '冰', description: '市场冰点节点', isDefault: true, createdAt: now },
+    { id: 'il-stair-announcement', category: 'stair', key: 'isAnnouncement', name: '公告', color: '#bc8cff', badge: '公', description: '公告驱动或公告风险', isDefault: true, createdAt: now },
+    { id: 'il-stair-space-first', category: 'stair', key: 'isSpaceFirst', name: '空间板先手', color: '#3fb950', badge: '先', description: '空间板方向先手', isDefault: true, createdAt: now },
+    { id: 'il-stair-space', category: 'stair', key: 'isSpace', name: '空间板', color: '#f0883e', badge: '空', description: '当前空间板', isDefault: true, createdAt: now },
+    { id: 'il-stair-next-broken', category: 'stair', key: 'isNextDayBroken', name: '次日炸板', color: '#f85149', badge: '炸', description: '次日炸板反馈', isDefault: true, createdAt: now },
+    { id: 'il-stair-no-premium', category: 'stair', key: 'isNextDayNoPremium', name: '次日无溢价', color: '#8b949e', badge: '无', description: '次日无溢价反馈', isDefault: true, createdAt: now },
+    { id: 'il-stair-premium', category: 'stair', key: 'isNextDayPremium', name: '次日有溢价', color: '#3fb950', badge: '溢', description: '次日溢价反馈', isDefault: true, createdAt: now }
+  ]
+  return [...regular, ...stairLabels]
 }
 
 function getDefaultCyclePhases(): CustomCyclePhase[] {

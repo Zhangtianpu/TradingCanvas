@@ -234,7 +234,7 @@
       <div v-else class="position-list">
         <div v-for="p in filteredClosedPositions" :key="p.stock.id + '-' + p.buyDate + '-' + p.closeDate" class="card position-card">
           <div class="pos-header">
-            <span class="pos-name" @click="$router.push(`/stocks/${p.stock.id}`)">{{ p.stock.name }}</span>
+            <span class="pos-name editable" @click.stop="openClosedEdit(p)">{{ p.stock.name }}</span>
             <span class="pos-code">{{ p.stock.code }}</span>
             <span class="pos-theme">{{ getThemeName(p.stock.themeId) }}</span>
             <span class="pos-mode">{{ getModeName(p.modeId) }}</span>
@@ -449,6 +449,38 @@
       </div>
     </div>
 
+    <!-- 已平仓编辑弹窗 -->
+    <div class="modal-overlay" v-if="closedEdit" @click.self="closedEdit = null">
+      <div class="modal-card">
+        <div class="modal-title">编辑已平仓交易</div>
+        <div class="modal-body">
+          <div class="form-row">
+            <label class="form-label">个股</label>
+            <div class="closed-stock-label">{{ closedEdit.stock.name }}（{{ closedEdit.stock.code }}）</div>
+          </div>
+          <div class="form-row">
+            <label class="form-label">买入均价</label>
+            <input type="number" step="0.01" v-model.number="closedEditForm.buyPrice" class="form-input" />
+          </div>
+          <div class="form-row">
+            <label class="form-label">卖出均价</label>
+            <input type="number" step="0.01" v-model.number="closedEditForm.sellPrice" class="form-input" />
+          </div>
+          <div class="form-row">
+            <label class="form-label">模式</label>
+            <select v-model="closedEditForm.modeId" class="form-select">
+              <option v-for="m in tradeModeStore.tradeModes" :key="m.id" :value="m.id">{{ m.name }}</option>
+            </select>
+          </div>
+          <div class="form-hint">保存后会同步更新对应买入/卖出交易记录，盈亏重新计算。</div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel" @click="closedEdit = null">取消</button>
+          <button class="btn-save" @click="saveClosedEdit">保存</button>
+        </div>
+      </div>
+    </div>
+
     <!-- 添加交易弹窗 -->
     <div class="modal-overlay" v-if="showAddTrade" @click.self="showAddTrade = false">
       <div class="modal-card">
@@ -541,7 +573,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useStockStore } from '@/stores/stock'
 import { useThemeStore } from '@/stores/theme'
 import { useTradeModeStore } from '@/stores/tradeMode'
@@ -705,6 +737,62 @@ const modeAnalysisData = computed<ModeAnalysisResult | null>(() => {
 // 添加/编辑交易弹窗
 const showAddTrade = ref(false)
 const editingTradeId = ref<string | null>(null)
+const closedEdit = ref<PositionData | null>(null)
+const closedEditForm = reactive({
+  buyPrice: 0,
+  sellPrice: 0,
+  modeId: ''
+})
+
+function openClosedEdit(position: PositionData) {
+  closedEdit.value = position
+  closedEditForm.buyPrice = position.avgBuyPrice
+  closedEditForm.sellPrice = position.avgSellPrice
+  closedEditForm.modeId = position.modeId || ''
+}
+
+function roundPrice(value: number): number {
+  return Math.round(value * 10000) / 10000
+}
+
+function saveClosedEdit() {
+  const position = closedEdit.value
+  if (!position) return
+  if (closedEditForm.buyPrice <= 0 || closedEditForm.sellPrice <= 0) {
+    toast.error('请输入有效的买卖价格')
+    return
+  }
+  const stock = position.stock
+  const buyIds = position.matchedBuyTradeIds || []
+  const buyTrades = stock.trades.filter(t => t.direction === 'buy' && buyIds.includes(t.id))
+  const sellTrade = stock.trades.find(t => t.direction === 'sell' && t.id === position.sellTradeId)
+    || stock.trades.find(t => t.direction === 'sell' && t.date === position.closeDate)
+
+  if (buyTrades.length > 0) {
+    const totalQty = buyTrades.reduce((sum, t) => sum + t.quantity, 0)
+    const totalAmount = buyTrades.reduce((sum, t) => sum + t.price * t.quantity, 0)
+    const ratio = totalQty > 0 && totalAmount > 0 ? closedEditForm.buyPrice * totalQty / totalAmount : 1
+    for (const t of buyTrades) {
+      stockStore.updateTradeRecord(stock.id, t.id, {
+        price: roundPrice(t.price * ratio),
+        modeId: closedEditForm.modeId || t.modeId
+      })
+    }
+  }
+
+  if (sellTrade) {
+    stockStore.updateTradeRecord(stock.id, sellTrade.id, {
+      price: closedEditForm.sellPrice,
+      modeId: closedEditForm.modeId || sellTrade.modeId
+    })
+  } else if (closedEditForm.sellPrice !== position.avgSellPrice) {
+    toast.error('未找到对应卖出交易记录')
+  }
+
+  toast.success('已平仓记录已更新')
+  closedEdit.value = null
+}
+
 const tradeForm = ref({
   stockInput: '',
   stockId: '',
@@ -1138,6 +1226,8 @@ interface PositionData {
   buyDate?: string   // 买入日期（已平仓单独记录时使用）
   closeDate?: string // 平仓日期（已平仓单独记录时使用）
   modeId?: string    // 交易模式（已平仓单独记录时使用）
+  matchedBuyTradeIds?: string[]
+  sellTradeId?: string
 }
 
 // 计算当前持仓的单独交易记录（FIFO配对后剩余的买入）
@@ -1279,6 +1369,7 @@ function computeClosedPositions(stock: Stock): PositionData[] {
       let matchedBuyFee = 0
       let firstBuyDate = ''  // 记录最早买入日期
       let firstBuyModeId = '' // 记录买入交易模式
+      const matchedBuyTradeIds: string[] = []
 
       while (sellQty > 0 && buyQueue.length > 0) {
         const buyItem = buyQueue[0]
@@ -1290,6 +1381,7 @@ function computeClosedPositions(stock: Stock): PositionData[] {
           firstBuyDate = buyItem.trade.date
           firstBuyModeId = buyItem.trade.modeId
         }
+        matchedBuyTradeIds.push(buyItem.trade.id)
 
         matchedBuyAmount += matchAmount
         matchedBuyQty += matchQty
@@ -1326,7 +1418,9 @@ function computeClosedPositions(stock: Stock): PositionData[] {
           totalFee,
           buyDate: firstBuyDate,
           closeDate: t.date,
-          modeId: firstBuyModeId
+          modeId: firstBuyModeId,
+          matchedBuyTradeIds,
+          sellTradeId: t.id
         })
       }
     }
@@ -2035,6 +2129,17 @@ function updateCloseNote(stockId: string, event: Event) {
 
 .pos-name:hover {
   color: var(--color-blue);
+}
+
+.closed-stock-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.form-hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 4px;
 }
 
 .pos-code {

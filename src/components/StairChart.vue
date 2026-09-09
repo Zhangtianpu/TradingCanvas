@@ -113,15 +113,12 @@
                           {{ getStockAtHeight(e, h)?.name }}
                         </span>
                         <div class="badge-row">
-                          <span v-if="getStockAtHeight(e, h)?.isAnnouncement" class="announcement-badge">公</span>
-                          <span v-if="getStockAtHeight(e, h)?.isIcePoint" class="ice-badge">冰</span>
-                          <span v-if="getStockAtHeight(e, h)?.isMedian" class="median-badge">中</span>
-                          <span v-if="getStockAtHeight(e, h)?.isBreakthrough" class="breakthrough-badge">突</span>
-                          <span v-if="getStockAtHeight(e, h)?.isSpaceFirst" class="space-first-badge">先</span>
-                          <span v-if="getStockAtHeight(e, h)?.isSpace" class="space-badge">空</span>
-                          <span v-if="getStockAtHeight(e, h)?.isNextDayBroken" class="broken-badge">炸</span>
-                          <span v-if="getStockAtHeight(e, h)?.isNextDayNoPremium" class="no-premium-badge">无</span>
-                          <span v-if="getStockAtHeight(e, h)?.isNextDayPremium" class="premium-badge">溢</span>
+                          <span
+                            v-for="tag in getActiveTagDefs(e, h)"
+                            :key="tag.key"
+                            class="dynamic-badge"
+                            :style="{ background: tag.color }"
+                          >{{ tag.badge || tag.name.slice(0, 1) }}</span>
                         </div>
                       </div>
                       <span v-if="!readOnly" class="edit-hint" @click.stop="handleCellClick(e, h)">✎</span>
@@ -137,15 +134,12 @@
                           {{ getFirstStock(e)?.name || '-' }}
                         </span>
                         <div class="badge-row">
-                          <span v-if="getFirstStock(e)?.isAnnouncement" class="announcement-badge">公</span>
-                          <span v-if="getFirstStock(e)?.isIcePoint" class="ice-badge">冰</span>
-                          <span v-if="getFirstStock(e)?.isMedian" class="median-badge">中</span>
-                          <span v-if="getFirstStock(e)?.isBreakthrough" class="breakthrough-badge">突</span>
-                          <span v-if="getFirstStock(e)?.isSpaceFirst" class="space-first-badge">先</span>
-                          <span v-if="getFirstStock(e)?.isSpace" class="space-badge">空</span>
-                          <span v-if="getFirstStock(e)?.isNextDayBroken" class="broken-badge">炸</span>
-                          <span v-if="getFirstStock(e)?.isNextDayNoPremium" class="no-premium-badge">无</span>
-                          <span v-if="getFirstStock(e)?.isNextDayPremium" class="premium-badge">溢</span>
+                          <span
+                            v-for="tag in getActiveTagDefs(e, h)"
+                            :key="tag.key"
+                            class="dynamic-badge"
+                            :style="{ background: tag.color }"
+                          >{{ tag.badge || tag.name.slice(0, 1) }}</span>
                         </div>
                       </div>
                       <span class="edit-hint" @click.stop="handleCellClick(e, h)">✎</span>
@@ -206,66 +200,11 @@
             />
           </div>
           <div class="tag-grid">
-            <div class="tag-col">
-              <div class="edit-row">
-                <label>
-                  <input type="checkbox" v-model="editForm.isBreakthrough" />
-                  高度突破
-                </label>
-              </div>
-              <div class="edit-row">
-                <label>
-                  <input type="checkbox" v-model="editForm.isMedian" />
-                  中位标记
-                </label>
-              </div>
-              <div class="edit-row">
-                <label>
-                  <input type="checkbox" v-model="editForm.isAnnouncement" />
-                  公告标记
-                </label>
-              </div>
-              <div class="edit-row">
-                <label>
-                  <input type="checkbox" v-model="editForm.isIcePoint" />
-                  冰点标记
-                </label>
-              </div>
-            </div>
-            <div class="tag-col">
-              <div class="edit-row">
-                <label>
-                  <input type="checkbox" v-model="editForm.isNextDayBroken" />
-                  次日炸板
-                </label>
-              </div>
-              <div class="edit-row">
-                <label>
-                  <input type="checkbox" v-model="editForm.isNextDayNoPremium" />
-                  次日无溢价
-                </label>
-              </div>
-              <div class="edit-row">
-                <label>
-                  <input type="checkbox" v-model="editForm.isNextDayPremium" />
-                  次日有溢价
-                </label>
-              </div>
-            </div>
-            <div class="tag-col">
-              <div class="edit-row">
-                <label>
-                  <input type="checkbox" v-model="editForm.isSpaceFirst" />
-                  空间板先手
-                </label>
-              </div>
-              <div class="edit-row">
-                <label>
-                  <input type="checkbox" v-model="editForm.isSpace" />
-                  空间板
-                </label>
-              </div>
-            </div>
+            <label v-for="def in stairTagDefs" :key="def.key" class="dynamic-tag-option">
+              <input type="checkbox" :value="def.key" v-model="editForm.tagKeys" />
+              <span class="tag-preview" :style="{ background: def.color }">{{ def.badge || def.name.slice(0, 1) }}</span>
+              {{ def.name }}
+            </label>
           </div>
           <div class="edit-row">
             <label>备注信息</label>
@@ -288,6 +227,7 @@ import { useRouter } from 'vue-router'
 import type { EmotionDaily, SpaceBoardStock } from '@/types'
 import { useEmotionStore } from '@/stores/emotion'
 import { useStockStore } from '@/stores/stock'
+import { useIndependentLabelStore } from '@/stores/independentLabel'
 
 const props = defineProps<{
   emotions: EmotionDaily[]
@@ -348,6 +288,8 @@ loadCustomTitle()
 const router = useRouter()
 const emotionStore = useEmotionStore()
 const stockStore = useStockStore()
+const labelStore = useIndependentLabelStore()
+const stairTagDefs = computed(() => labelStore.sortedLabels.filter(l => l.category === 'stair'))
 
 // ===== 独立标签管理系统 =====
 // 每个图表实例独立存储标签数据，不共享
@@ -361,7 +303,20 @@ interface TagFlags {
   isNextDayBroken: boolean
   isNextDayNoPremium: boolean
   isNextDayPremium: boolean
+  tags?: string[]
 }
+
+const STAIR_FLAG_KEYS = [
+  'isBreakthrough',
+  'isMedian',
+  'isIcePoint',
+  'isAnnouncement',
+  'isSpaceFirst',
+  'isSpace',
+  'isNextDayBroken',
+  'isNextDayNoPremium',
+  'isNextDayPremium'
+]
 
 const tagStorageKey = computed(() => `stairChartTags_${props.chartId || 'default'}`)
 const tagOverrides = ref<Record<string, Record<string, TagFlags>>>({})
@@ -624,15 +579,7 @@ const editingCell = ref<{ date: string; height: number; emotion: EmotionDaily } 
 const editForm = ref({
   stockName: '',
   selectedStockId: '',
-  isBreakthrough: false,
-  isMedian: false,
-  isIcePoint: false,
-  isAnnouncement: false,
-  isSpaceFirst: false,
-  isSpace: false,
-  isNextDayBroken: false,
-  isNextDayNoPremium: false,
-  isNextDayPremium: false,
+  tagKeys: [] as string[],
   remark: ''
 })
 const editInputRef = ref<HTMLInputElement | null>(null)
@@ -713,6 +660,24 @@ function getFirstStock(e: EmotionDaily): SpaceBoardStock | null {
   return applyTagOverrides(e, maxStock || e.spaceBoardStocks[0])
 }
 
+function getActiveTagDefs(e: EmotionDaily, h: number) {
+  const stock = getStockAtHeight(e, h) || getFirstStock(e)
+  if (!stock) return []
+  const overrides = getStockTags(e.date, stock.name, stock.height)
+  const stockAny = stock as unknown as Record<string, unknown>
+  const overridesAny = overrides as unknown as Record<string, unknown> | null
+  const active: string[] = []
+  for (const def of stairTagDefs.value) {
+    if (STAIR_FLAG_KEYS.includes(def.key)) {
+      const on = overridesAny ? !!overridesAny[def.key] : !!stockAny[def.key]
+      if (on) active.push(def.key)
+    } else if (overrides?.tags?.includes(def.key)) {
+      active.push(def.key)
+    }
+  }
+  return stairTagDefs.value.filter(def => active.includes(def.key))
+}
+
 // 获取单元格样式类
 function getCellClass(e: EmotionDaily, h: number, idx: number): Record<string, boolean> {
   const classes: Record<string, boolean> = {}
@@ -790,19 +755,25 @@ function handleCellClick(e: EmotionDaily, h: number) {
   // 获取现有股票信息
   const existingStock = getStockAtHeight(e, h) || (h === e.maxBoardHeight ? getFirstStock(e) : null)
 
+  const tagKeys = new Set<string>()
+  if (existingStock) {
+    const overrides = getStockTags(e.date, existingStock.name, existingStock.height)
+    const stockAny = existingStock as unknown as Record<string, unknown>
+    const overridesAny = overrides as unknown as Record<string, unknown> | null
+    for (const def of stairTagDefs.value) {
+      if (STAIR_FLAG_KEYS.includes(def.key)) {
+        const active = overridesAny ? !!overridesAny[def.key] : !!stockAny[def.key]
+        if (active) tagKeys.add(def.key)
+      } else if (overrides?.tags?.includes(def.key)) {
+        tagKeys.add(def.key)
+      }
+    }
+  }
+
   editForm.value = {
     stockName: existingStock?.name || '',
     selectedStockId: existingStock?.stockId || '',
-    // 从股票对象读取标签（如果存在）
-    isBreakthrough: existingStock?.isBreakthrough || false,
-    isMedian: existingStock?.isMedian || false,
-    isIcePoint: existingStock?.isIcePoint || false,
-    isAnnouncement: existingStock?.isAnnouncement || false,
-    isSpaceFirst: existingStock?.isSpaceFirst || false,
-    isSpace: existingStock?.isSpace || false,
-    isNextDayBroken: existingStock?.isNextDayBroken || false,
-    isNextDayNoPremium: existingStock?.isNextDayNoPremium || false,
-    isNextDayPremium: existingStock?.isNextDayPremium || false,
+    tagKeys: [...tagKeys],
     remark: e.remark || ''
   }
 
@@ -865,16 +836,18 @@ function saveEdit() {
 
   // 保存标签到独立的覆盖表（每个图表实例独立）
   if (stockName) {
+    const selected = editForm.value.tagKeys
     setStockTags(emotion.date, stockName, height, {
-      isBreakthrough: editForm.value.isBreakthrough,
-      isMedian: editForm.value.isMedian,
-      isIcePoint: editForm.value.isIcePoint,
-      isAnnouncement: editForm.value.isAnnouncement,
-      isSpaceFirst: editForm.value.isSpaceFirst,
-      isSpace: editForm.value.isSpace,
-      isNextDayBroken: editForm.value.isNextDayBroken,
-      isNextDayNoPremium: editForm.value.isNextDayNoPremium,
-      isNextDayPremium: editForm.value.isNextDayPremium
+      isBreakthrough: selected.includes('isBreakthrough'),
+      isMedian: selected.includes('isMedian'),
+      isIcePoint: selected.includes('isIcePoint'),
+      isAnnouncement: selected.includes('isAnnouncement'),
+      isSpaceFirst: selected.includes('isSpaceFirst'),
+      isSpace: selected.includes('isSpace'),
+      isNextDayBroken: selected.includes('isNextDayBroken'),
+      isNextDayNoPremium: selected.includes('isNextDayNoPremium'),
+      isNextDayPremium: selected.includes('isNextDayPremium'),
+      tags: [...selected]
     })
   }
 
@@ -1284,6 +1257,19 @@ function deleteEdit() {
   gap: 2px;
 }
 
+.dynamic-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 3px;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .cell.filled {
   background: rgba(240, 192, 64, 0.1);
 }
@@ -1586,6 +1572,37 @@ function deleteEdit() {
   grid-template-columns: 1fr 1fr 1fr;
   gap: 8px;
   margin-bottom: 12px;
+}
+
+.dynamic-tag-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  margin: 0;
+}
+
+.dynamic-tag-option:hover {
+  border-color: var(--color-blue);
+}
+
+.tag-preview {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 3px;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  flex-shrink: 0;
 }
 
 .tag-col .edit-row {

@@ -150,6 +150,45 @@
       >暂无标签</div>
     </div>
 
+    <!-- 天梯图标签 -->
+    <div v-if="activeTab === 'stairLabels'" class="tab-content">
+      <div class="content-header">
+        <span class="content-title">天梯图标签</span>
+        <button class="btn-add" @click="openStockFlowAdd('stair')">+ 新建</button>
+      </div>
+      <div class="mode-grid">
+        <div
+          v-for="label in independentLabelStore.sortedLabels.filter(l => l.category === 'stair')"
+          :key="label.id"
+          class="mode-card"
+        >
+          <div class="mode-color" :style="{ background: label.color }"></div>
+          <div class="mode-info">
+            <div class="mode-name">
+              <span class="badge-preview" :style="{ background: label.color }">{{ label.badge || label.name.slice(0, 1) }}</span>
+              {{ label.name }}
+              <span v-if="label.isDefault" class="default-tag">默认</span>
+            </div>
+            <div class="mode-desc" v-if="label.description">{{ label.description }}</div>
+            <div class="mode-desc empty" v-else>暂无说明</div>
+          </div>
+          <div class="mode-actions">
+            <button class="btn-edit" @click="openStockFlowEdit(label)">编辑</button>
+            <button
+              v-if="!label.isDefault"
+              class="btn-del"
+              @click="handleDelete('stockFlowLabels', label.id)"
+            >删除</button>
+            <span v-else class="lock-hint" title="默认项不可删除">🔒</span>
+          </div>
+        </div>
+      </div>
+      <div
+        v-if="independentLabelStore.sortedLabels.filter(l => l.category === 'stair').length === 0"
+        class="empty-state"
+      >暂无标签</div>
+    </div>
+
     <!-- 添加/编辑弹窗 -->
     <div class="modal-overlay" v-if="showModal" @click.self="closeModal">
       <div class="modal-card">
@@ -163,6 +202,16 @@
               class="form-input"
               :placeholder="namePlaceholder"
               @keyup.enter="handleSave"
+            />
+          </div>
+          <div v-if="editingType === 'stockFlowLabels' && activeStockCategory === 'stair'" class="form-row">
+            <label class="form-label">天梯图简称</label>
+            <input
+              type="text"
+              v-model="form.badge"
+              class="form-input badge-input"
+              maxlength="2"
+              placeholder="如：突、炸、溢"
             />
           </div>
           <div class="form-row">
@@ -224,13 +273,14 @@ const customTradeStyleStore = useCustomTradeStyleStore()
 const customCyclePhaseStore = useCustomCyclePhaseStore()
 const independentLabelStore = useIndependentLabelStore()
 
-type TabKey = 'tradeMode' | 'tradeStyle' | 'cyclePhase' | 'stockFlowLabels'
+type TabKey = 'tradeMode' | 'tradeStyle' | 'cyclePhase' | 'stockFlowLabels' | 'stairLabels'
 
 const tabs = [
   { key: 'tradeMode' as TabKey, label: '交易模式' },
   { key: 'tradeStyle' as TabKey, label: '交易风格' },
   { key: 'cyclePhase' as TabKey, label: '情绪阶段' },
-  { key: 'stockFlowLabels' as TabKey, label: '个股分析' }
+  { key: 'stockFlowLabels' as TabKey, label: '个股分析' },
+  { key: 'stairLabels' as TabKey, label: '天梯图' }
 ]
 
 const activeTab = ref<TabKey>('tradeMode')
@@ -240,7 +290,7 @@ const activeStockCategory = ref<IndependentLabelCategory>('position')
 const currentColorPool = computed(() => {
   if (activeTab.value === 'tradeStyle') return TRADE_STYLE_COLOR_POOL
   if (activeTab.value === 'cyclePhase') return CYCLE_PHASE_COLOR_POOL
-  if (activeTab.value === 'stockFlowLabels') return INDEPENDENT_LABEL_COLOR_POOL
+  if (activeTab.value === 'stockFlowLabels' || activeTab.value === 'stairLabels') return INDEPENDENT_LABEL_COLOR_POOL
   return defaultColorPresets
 })
 
@@ -259,7 +309,7 @@ const colorPresets = computed(() => {
 const showModal = ref(false)
 const editingType = ref<TabKey>('tradeMode')
 const editingId = ref<string | null>(null)
-const form = ref({ name: '', color: '#3fb950', description: '' })
+const form = ref({ name: '', color: '#3fb950', badge: '', description: '' })
 
 const modalTitle = computed(() => {
   const action = editingId.value ? '编辑' : '新建'
@@ -277,6 +327,7 @@ const namePlaceholder = computed(() => {
   if (editingType.value === 'stockFlowLabels') {
     if (activeStockCategory.value === 'position') return '如：龙头、补涨'
     if (activeStockCategory.value === 'status') return '如：连板、断板反包'
+    if (activeStockCategory.value === 'stair') return '如：高度突破、次日炸板'
     return '如：独立、高低切'
   }
   return '如：启动、主升、分歧、退潮'
@@ -292,6 +343,7 @@ function openAdd(type: TabKey) {
   form.value = {
     name: '',
     color: pool[Math.floor(Math.random() * pool.length)],
+    badge: '',
     description: ''
   }
   showModal.value = true
@@ -303,6 +355,7 @@ function openEdit(type: TabKey, item: CustomTradeMode | CustomTradeStyle | Custo
   form.value = {
     name: item.name,
     color: item.color,
+    badge: '',
     description: item.description || ''
   }
   showModal.value = true
@@ -316,19 +369,26 @@ function openStockFlowAdd(category: IndependentLabelCategory) {
   form.value = {
     name: '',
     color: INDEPENDENT_LABEL_COLOR_POOL[Math.floor(Math.random() * INDEPENDENT_LABEL_COLOR_POOL.length)],
+    badge: '',
     description: ''
+  }
+  if (category === 'stair') {
+    activeTab.value = 'stairLabels'
+  } else {
+    activeTab.value = 'stockFlowLabels'
   }
   showModal.value = true
 }
 
 function openStockFlowEdit(item: IndependentLabel) {
-  activeTab.value = 'stockFlowLabels'
+  activeTab.value = item.category === 'stair' ? 'stairLabels' : 'stockFlowLabels'
   activeStockCategory.value = item.category
   editingType.value = 'stockFlowLabels'
   editingId.value = item.id
   form.value = {
     name: item.name,
     color: item.color,
+    badge: item.badge || '',
     description: item.description || ''
   }
   showModal.value = true
@@ -356,6 +416,7 @@ function handleSave() {
   const payload = {
     name: form.value.name.trim(),
     color: form.value.color,
+    badge: form.value.badge.trim() || undefined,
     description: form.value.description.trim()
   }
 
@@ -553,6 +614,23 @@ function handleDelete(type: TabKey, id: string) {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.badge-preview {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.badge-input {
+  max-width: 140px;
 }
 
 .default-tag {
