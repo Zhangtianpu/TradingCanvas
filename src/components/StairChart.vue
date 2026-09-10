@@ -49,7 +49,7 @@
     <div class="chart-body" v-if="displayEmotions.length > 0">
       <!-- 高度标签 -->
       <div class="height-labels">
-        <div v-for="h in heightRange" :key="h" class="height-label">{{ h }}板</div>
+        <div v-for="h in heightRange" :key="h" class="height-label" :class="{ 'row-highlight': hoveredHeight === h }">{{ h }}板</div>
         <div class="height-adjust">
           <button class="height-btn" @click="addHeightLevel" title="增加板高">+</button>
           <button class="height-btn" @click="removeHeightLevel" title="减少板高">−</button>
@@ -94,7 +94,13 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="h in heightRange" :key="h">
+                <tr
+                  v-for="h in heightRange"
+                  :key="h"
+                  :class="{ 'row-highlight': hoveredHeight === h }"
+                  @mouseenter="hoveredHeight = h"
+                  @mouseleave="hoveredHeight = null"
+                >
                   <td
                     v-for="(e, idx) in displayEmotions"
                     :key="e.id"
@@ -573,6 +579,9 @@ watch(() => displayEmotions.value, () => {
     nextTick(updateScrollbar)
   })
 }, { deep: true })
+
+// 悬停行高亮
+const hoveredHeight = ref<number | null>(null)
 
 // 编辑状态
 const editingCell = ref<{ date: string; height: number; emotion: EmotionDaily } | null>(null)
@@ -1153,7 +1162,8 @@ function deleteEdit() {
 }
 
 .stair-table {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   table-layout: fixed;
 }
 
@@ -1162,9 +1172,19 @@ function deleteEdit() {
   width: var(--cell-width, 80px);
   height: 38px;
   text-align: center;
-  border: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
   font-size: 12px;
   box-sizing: border-box;
+}
+
+.stair-table th:first-child,
+.stair-table td:first-child {
+  border-left: 1px solid var(--border-color);
+}
+
+.stair-table thead th {
+  border-top: 1px solid var(--border-color);
 }
 
 .date-header {
@@ -1271,60 +1291,83 @@ function deleteEdit() {
 }
 
 .cell.filled {
-  background: rgba(240, 192, 64, 0.1);
+  background: rgba(88, 166, 255, 0.08);
+  border-color: rgba(88, 166, 255, 0.18);
 }
 
 .cell.has-stock {
-  background: rgba(240, 192, 64, 0.25);
+  background: rgba(240, 192, 64, 0.16);
+  border-color: rgba(240, 192, 64, 0.34);
 }
 
 .cell.max-height {
-  background: rgba(240, 192, 64, 0.35);
-  border-color: rgba(240, 192, 64, 0.5);
+  background: linear-gradient(180deg, rgba(240, 192, 64, 0.38), rgba(240, 192, 64, 0.18));
+  border-color: rgba(240, 192, 64, 0.7);
+  box-shadow: inset 3px 0 0 rgba(240, 192, 64, 0.9);
 }
 
 .cell.breakthrough {
-  background: rgba(248, 81, 73, 0.25);
-  border-color: rgba(248, 81, 73, 0.5);
+  background: rgba(248, 81, 73, 0.3);
+  border-color: rgba(248, 81, 73, 0.65);
+  box-shadow: inset 3px 0 0 rgba(248, 81, 73, 0.95);
 }
 
 .cell.median {
-  background: rgba(63, 185, 80, 0.15);
-  border-color: rgba(63, 185, 80, 0.4);
+  background: rgba(63, 185, 80, 0.2);
+  border-color: rgba(63, 185, 80, 0.5);
 }
 
 .cell.ice-point {
-  background: rgba(88, 166, 255, 0.15);
-  border-color: rgba(88, 166, 255, 0.4);
+  background: rgba(88, 166, 255, 0.2);
+  border-color: rgba(88, 166, 255, 0.5);
 }
 
 .cell.announcement {
-  border-color: rgba(168, 85, 247, 0.5);
+  background: rgba(188, 140, 255, 0.18);
+  border-color: rgba(188, 140, 255, 0.55);
 }
 
 .cell.space-first {
-  background: rgba(255, 140, 0, 0.2);
-  border-color: rgba(255, 140, 0, 0.5);
+  background: rgba(240, 136, 62, 0.22);
+  border-color: rgba(240, 136, 62, 0.55);
 }
 
 .cell.space-board {
-  background: rgba(0, 191, 255, 0.15);
-  border-color: rgba(0, 191, 255, 0.4);
+  background: rgba(56, 189, 248, 0.2);
+  border-color: rgba(56, 189, 248, 0.5);
 }
 
 .cell.next-day-broken {
-  background: rgba(255, 69, 0, 0.2);
-  border-color: rgba(255, 69, 0, 0.5);
+  background: rgba(239, 68, 68, 0.26);
+  border-color: rgba(239, 68, 68, 0.6);
 }
 
 .cell.next-day-no-premium {
-  background: rgba(128, 128, 128, 0.2);
-  border-color: rgba(128, 128, 128, 0.5);
+  background: rgba(107, 114, 128, 0.24);
+  border-color: rgba(107, 114, 128, 0.55);
 }
 
 .cell.next-day-premium {
-  background: rgba(255, 215, 0, 0.2);
-  border-color: rgba(255, 215, 0, 0.5);
+  background: rgba(34, 197, 94, 0.22);
+  border-color: rgba(34, 197, 94, 0.55);
+}
+
+.stair-table tbody tr {
+  transition: opacity 0.25s, box-shadow 0.25s;
+}
+
+.stair-table tbody tr.row-highlight td {
+  box-shadow: inset 0 0 0 1px rgba(88, 166, 255, 0.32), inset 0 0 10px rgba(88, 166, 255, 0.07);
+}
+
+.height-label {
+  transition: color 0.25s, background 0.25s;
+}
+
+.height-label.row-highlight {
+  color: rgba(88, 166, 255, 0.88);
+  background: rgba(88, 166, 255, 0.11);
+  border-radius: 3px;
 }
 
 .median-badge {
