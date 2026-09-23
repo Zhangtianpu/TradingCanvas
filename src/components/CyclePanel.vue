@@ -175,6 +175,8 @@ import { useCycleStore } from '@/stores/cycle'
 import { useCycleSummaryStore } from '@/stores/cycleSummary'
 import { useCustomTradeStyleStore } from '@/stores/customTradeStyle'
 import { useCustomCyclePhaseStore } from '@/stores/customCyclePhase'
+import { useIndependentTargetStore } from '@/stores/independentTarget'
+import { useIndependentLabelStore } from '@/stores/independentLabel'
 import { useToast } from '@/composables/useToast'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import type { TradeStyle, CyclePhase, TradeStyleHistory, CyclePhaseHistory } from '@/types'
@@ -184,6 +186,8 @@ const cycleStore = useCycleStore()
 const cycleSummaryStore = useCycleSummaryStore()
 const customTradeStyleStore = useCustomTradeStyleStore()
 const customCyclePhaseStore = useCustomCyclePhaseStore()
+const independentTargetStore = useIndependentTargetStore()
+const independentLabelStore = useIndependentLabelStore()
 const toast = useToast()
 
 // 从 store 动态读取交易风格选项
@@ -434,6 +438,11 @@ function handleSaveCycle() {
   const tradeStyleSnapshot = cycleStore.sortedTradeStyleHistory.filter(
     h => h.date >= startDate && h.date <= endDate
   )
+  const independentTargetSnapshot = independentTargetStore.sortedTargets
+    .filter(t => !t.hiddenFromDashboard)
+    .map(t => JSON.parse(JSON.stringify(t)))
+  const independentLabelSnapshot = independentLabelStore.labels
+    .map(l => JSON.parse(JSON.stringify(l)))
 
   const summary = cycleSummaryStore.createCycle({
     name: name.trim(),
@@ -441,7 +450,9 @@ function handleSaveCycle() {
     endDate,
     description: description.trim(),
     cyclePhaseSnapshot,
-    tradeStyleSnapshot
+    tradeStyleSnapshot,
+    independentTargetSnapshot,
+    independentLabelSnapshot
   })
 
   toast.success(`周期「${summary.name}」已保存`)

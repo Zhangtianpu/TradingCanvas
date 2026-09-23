@@ -99,6 +99,19 @@
                       {{ chart.title }}
                       <span class="expand-icon">{{ expandedChartKey === chart.key ? '⊖' : '⊕' }}</span>
                     </div>
+                    <div
+                      v-if="expandedChartKey === chart.key"
+                      class="expanded-range-controls"
+                      @click.stop
+                    >
+                      <button
+                        v-for="range in expandedRanges"
+                        :key="String(range.value)"
+                        class="expanded-range-btn"
+                        :class="{ active: expandedRange === range.value }"
+                        @click="expandedRange = range.value"
+                      >{{ range.label }}</button>
+                    </div>
                     <div class="chart-container" :class="{ expanded: expandedChartKey === chart.key }">
                       <canvas :ref="el => setChartRef(chart.key, el)"></canvas>
                     </div>
@@ -293,6 +306,12 @@ const timeRanges = [
 ]
 const selectedRange = ref(20)
 const customRange = ref<number | null>(null)
+const expandedRange = ref<number | 'all'>(30)
+const expandedRanges = [
+  { label: '30天', value: 30 as const },
+  { label: '60天', value: 60 as const },
+  { label: '全部', value: 'all' as const }
+]
 
 function applyCustomRange() {
   if (customRange.value && customRange.value >= 1 && customRange.value <= 365) {
@@ -317,6 +336,13 @@ const latestEmotion = computed(() => emotionStore.latestEmotion)
 const recentEmotions = computed(() => {
   return [...emotionStore.sortedEmotions].reverse().slice(-selectedRange.value)
 })
+
+function getEmotionsForChart(key: string) {
+  const all = [...emotionStore.sortedEmotions].reverse()
+  const range = expandedChartKey.value === key ? expandedRange.value : selectedRange.value
+  if (range === 'all') return all
+  return all.slice(-range)
+}
 
 // 读取stairChart1的标签覆盖数据（空间板高度折线图以第一个天梯图为准）
 function getChart1TagOverrides(): Record<string, Record<string, any>> {
@@ -416,6 +442,7 @@ function createGradient(ctx: CanvasRenderingContext2D, color: string, height: nu
 
 // 获取图表数据
 function getChartData(key: string): number[] {
+  const emotions = getEmotionsForChart(key)
   const dataMap: Record<string, (e: any) => number> = {
     sh: e => e.shIndex || 0,
     sz: e => e.szIndex || 0,
@@ -429,7 +456,24 @@ function getChartData(key: string): number[] {
     height: e => e.maxBoardHeight || 0,
     targetStocks: e => reviewStore.getReviewByDate(e.date)?.targetStocks || 0
   }
-  return recentEmotions.value.map(dataMap[key] || (e => 0))
+  return emotions.map(dataMap[key] || (e => 0))
+}
+
+function formatChartValue(key: string, value: number): string {
+  if (['sh', 'sz', 'cyb', 'allA'].includes(key)) return value.toFixed(2) + ' 点'
+  if (key === 'sealRate') return value.toFixed(2) + '%'
+  if (key === 'height') return value.toFixed(0) + ' 板'
+  if (key === 'targetStocks') return value.toFixed(0) + ' 个'
+  return value.toLocaleString() + ' 家'
+}
+
+function chartTooltipTitle(emotions: EmotionDaily[], items: any[]): string {
+  const index = items[0]?.dataIndex
+  return emotions[index]?.date || items[0]?.label || ''
+}
+
+function chartTooltipLabel(config: any, context: any): string {
+  return `${config.title}：${formatChartValue(config.key, Number(context.parsed.y) || 0)}`
 }
 
 // 创建单线图表
@@ -438,8 +482,9 @@ function createChart(canvas: HTMLCanvasElement, config: any) {
   if (!ctx) return null
 
   const height = 140
+  const emotions = getEmotionsForChart(config.key)
   const data = getChartData(config.key)
-  const labels = recentEmotions.value.map(e => e.date.slice(5))
+  const labels = emotions.map(e => e.date.slice(5))
 
   // 空间板高度特殊处理
   if (config.key === 'height') {
@@ -455,12 +500,12 @@ function createChart(canvas: HTMLCanvasElement, config: any) {
           borderWidth: 2.5,
           fill: config.fill,
           tension: 0.4,
-          pointRadius: recentEmotions.value.map(e => {
+          pointRadius: emotions.map(e => {
             // 以第一个天梯图的标签为准
             if (hasIcePointInChart1(e) || hasBreakthroughInChart1(e)) return 6
             return 3
           }),
-          pointBackgroundColor: recentEmotions.value.map(e => {
+          pointBackgroundColor: emotions.map(e => {
             // 以第一个天梯图的标签为准
             if (hasIcePointInChart1(e)) return '#58a6ff'
             if (hasBreakthroughInChart1(e)) return '#f85149'
@@ -478,8 +523,10 @@ function createChart(canvas: HTMLCanvasElement, config: any) {
           tooltip: {
             ...chartOptions.plugins.tooltip,
             callbacks: {
+              title: (items: any[]) => chartTooltipTitle(emotions, items),
+              label: (context: any) => chartTooltipLabel(config, context),
               afterLabel: function(context: any) {
-                const e = recentEmotions.value[context.dataIndex]
+                const e = emotions[context.dataIndex]
                 const labels: string[] = []
                 // 以第一个天梯图的标签为准
                 if (hasIcePointInChart1(e)) {
@@ -523,7 +570,19 @@ function createChart(canvas: HTMLCanvasElement, config: any) {
         pointHoverBorderWidth: 2
       }]
     },
-    options: chartOptions
+    options: {
+      ...chartOptions,
+      plugins: {
+        ...chartOptions.plugins,
+        tooltip: {
+          ...chartOptions.plugins.tooltip,
+          callbacks: {
+            title: (items: any[]) => chartTooltipTitle(emotions, items),
+            label: (context: any) => chartTooltipLabel(config, context)
+          }
+        }
+      }
+    }
   })
 }
 
@@ -548,25 +607,26 @@ function renderAllCharts() {
   })
 }
 
-// 切换展开状态 - 不销毁图表，只调用resize
+// 切换展开状态：保留现有 Chart 实例，等待布局稳定后调整尺寸。
+// 重建实例会丢失部分交互状态，因此这里只 resize + update。
 async function toggleExpand(key: string) {
   expandedChartKey.value = expandedChartKey.value === key ? null : key
-
-  // 等待DOM更新完成（CSS高度变化）
   await nextTick()
-  // 再等一帧确保布局完成
   requestAnimationFrame(() => {
-    // 对所有图表调用resize，让Chart.js适应新的容器尺寸
-    Object.keys(chartInstances.value).forEach(k => {
-      if (chartInstances.value[k]) {
-        chartInstances.value[k].resize()
-      }
+    requestAnimationFrame(() => {
+      Object.keys(chartInstances.value).forEach(k => {
+        const chart = chartInstances.value[k]
+        if (chart) {
+          chart.resize()
+          chart.update('none')
+        }
+      })
     })
   })
 }
 
-// 监听时间范围变化重新渲染
-watch(selectedRange, async () => {
+// 时间范围变化时重新渲染（展开状态由 toggleExpand 处理）
+watch([selectedRange, expandedRange], async () => {
   destroyAllCharts()
   await nextTick()
   renderAllCharts()
@@ -974,6 +1034,35 @@ watch(() => emotionStore.sortedEmotions.length, async () => {
 .chart-card.expanded {
   grid-column: 1 / -1;
   border-color: var(--color-blue);
+}
+
+.expanded-range-controls {
+  display: flex;
+  justify-content: flex-end;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+
+.expanded-range-btn {
+  padding: 3px 10px;
+  font-size: 11px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.expanded-range-btn:hover {
+  border-color: var(--color-blue);
+  color: var(--color-blue);
+}
+
+.expanded-range-btn.active {
+  background: rgba(88,166,255,0.16);
+  border-color: var(--color-blue);
+  color: var(--color-blue);
 }
 
 .chart-title {

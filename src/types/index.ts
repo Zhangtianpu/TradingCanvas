@@ -269,6 +269,9 @@ export interface CycleSummary {
   cyclePhaseSnapshot: CyclePhaseHistory[]
   // 周期内交易风格快照
   tradeStyleSnapshot: TradeStyleHistory[]
+  // 周期内个股分析快照与对应标签定义
+  independentTargetSnapshot?: IndependentTarget[]
+  independentLabelSnapshot?: IndependentLabel[]
   createdAt: string
   updatedAt: string
 }

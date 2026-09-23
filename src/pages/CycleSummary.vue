@@ -83,6 +83,18 @@
         </div>
       </div>
 
+      <!-- 个股分析快照 -->
+      <div v-if="currentCycle.independentTargetSnapshot && currentCycle.independentTargetSnapshot.length > 0" class="detail-section stock-snapshot-section">
+        <div class="section-header">
+          <div class="section-title">个股分析</div>
+          <span class="range-tag">{{ currentCycle.independentTargetSnapshot.length }} 个标的</span>
+        </div>
+        <StockFlowSnapshot
+          :targets="currentCycle.independentTargetSnapshot"
+          :labels="currentCycle.independentLabelSnapshot || []"
+        />
+      </div>
+
       <!-- 周期概要 -->
       <div class="cycle-overview">
         <div class="overview-row">
@@ -322,6 +334,7 @@ import {
 } from 'chart.js'
 import StairChart from '@/components/StairChart.vue'
 import ThemeTree from '@/components/ThemeTree.vue'
+import StockFlowSnapshot from '@/components/StockFlowSnapshot.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { useCycleSummaryStore } from '@/stores/cycleSummary'
 import { useEmotionStore } from '@/stores/emotion'
@@ -333,7 +346,8 @@ import { useCustomTradeStyleStore } from '@/stores/customTradeStyle'
 import { useCustomCyclePhaseStore } from '@/stores/customCyclePhase'
 import { useToast } from '@/composables/useToast'
 import { loadData } from '@/composables/useStorage'
-import type { CycleSummary as CycleSummaryType, CyclePhaseHistory, TradeStyleHistory, EmotionDaily, TradeRecord, Stock } from '@/types'
+import { today } from '@/composables/useDate'
+import type { CycleSummary as CycleSummaryType, CyclePhaseHistory, TradeStyleHistory, EmotionDaily, TradeRecord, Stock, IndependentTarget, IndependentStage, IndependentLabelCategory } from '@/types'
 
 ChartJS.register(
   CategoryScale,
@@ -849,6 +863,50 @@ function sortPhases(phases: CyclePhaseHistory[]) {
 
 function sortStyles(styles: TradeStyleHistory[]) {
   return [...styles].sort((a, b) => a.date.localeCompare(b.date))
+}
+
+function getSnapshotLabelName(category: IndependentLabelCategory, key: string) {
+  const label = currentCycle.value?.independentLabelSnapshot?.find(l => l.category === category && l.key === key)
+  return label?.name || key
+}
+
+function getSnapshotTagStyle(category: IndependentLabelCategory, key: string) {
+  const label = currentCycle.value?.independentLabelSnapshot?.find(l => l.category === category && l.key === key)
+  const color = label?.color || '#8b949e'
+  return {
+    color,
+    background: color + '22',
+    borderColor: color + '55'
+  }
+}
+
+function getTargetStages(target: IndependentTarget): IndependentStage[] {
+  if (target.stages && target.stages.length > 0) {
+    return [...target.stages].sort((a, b) => a.date.localeCompare(b.date))
+  }
+  return [{
+    id: target.id + '-stage',
+    date: target.startDate,
+    status: target.status
+  }]
+}
+
+function previousTradingDay(date: string): string {
+  const cursor = new Date(date)
+  while (cursor.getDay() === 0 || cursor.getDay() === 6) {
+    cursor.setDate(cursor.getDate() - 1)
+  }
+  return cursor.toISOString().slice(0, 10)
+}
+
+function getSnapshotStageEnd(target: IndependentTarget, idx: number): string {
+  const stages = getTargetStages(target)
+  if (idx < stages.length - 1) {
+    const cursor = new Date(stages[idx + 1].date)
+    cursor.setDate(cursor.getDate() - 1)
+    return previousTradingDay(cursor.toISOString().slice(0, 10))
+  }
+  return previousTradingDay(target.endDate || today())
 }
 
 function countTradingDays(startDate: string, endDate: string): number {
@@ -1434,6 +1492,80 @@ async function handleDelete() {
 /* 周期总结编辑模块 */
 .summary-section {
   border-left: 3px solid var(--color-blue);
+}
+
+.stock-snapshot-section {
+  border-left: 3px solid var(--color-orange);
+}
+
+.snapshot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.snapshot-target {
+  padding: 9px 10px;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+}
+
+.snapshot-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 7px;
+}
+
+.snapshot-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.snapshot-code {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.snapshot-tag {
+  padding: 1px 7px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.snapshot-stages {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.snapshot-stage {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.snapshot-status {
+  font-weight: 600;
+}
+
+.snapshot-date,
+.snapshot-days {
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.snapshot-arrow {
+  color: var(--text-tertiary);
+  font-size: 11px;
 }
 
 .btn-edit-summary {

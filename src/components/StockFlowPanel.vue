@@ -439,13 +439,13 @@ function insertStageAfter(index: number) {
   const prev = form.stages[index]
   const next = form.stages[index + 1]
   const fallbackStatus = labelOptions('status')[0]?.value || prev.status || 'board'
-  const insertDate = next ? next.date : prev ? addDays(prev.date, 1) : today()
+  const insertDate = next ? next.date : prev ? addTradingDays(prev.date, 1) : today()
   const newStage: IndependentStage = {
     id: generateId(),
     date: insertDate,
     status: prev.status || fallbackStatus
   }
-  const shifted = form.stages.map((s, i) => i > index ? { ...s, date: addDays(s.date, 1) } : s)
+  const shifted = form.stages.map((s, i) => i > index ? { ...s, date: addTradingDays(s.date, 1) } : s)
   shifted.splice(index + 1, 0, newStage)
   form.stages = shifted
 }
@@ -646,17 +646,33 @@ function getStages(target: IndependentTarget): IndependentStage[] {
   }]
 }
 
-function addDays(date: string, delta: number): string {
-  return new Date(new Date(date).getTime() + delta * 86400000).toISOString().slice(0, 10)
+function addTradingDays(date: string, delta: number): string {
+  const direction = delta >= 0 ? 1 : -1
+  let remaining = Math.abs(delta)
+  const cursor = new Date(date)
+  while (remaining > 0) {
+    cursor.setDate(cursor.getDate() + direction)
+    const day = cursor.getDay()
+    if (day !== 0 && day !== 6) remaining--
+  }
+  return cursor.toISOString().slice(0, 10)
+}
+
+function previousTradingDay(date: string): string {
+  const cursor = new Date(date)
+  while (cursor.getDay() === 0 || cursor.getDay() === 6) {
+    cursor.setDate(cursor.getDate() - 1)
+  }
+  return cursor.toISOString().slice(0, 10)
 }
 
 function getStageEnd(target: IndependentTarget, idx: number): string {
   const stages = getStages(target)
   if (idx < stages.length - 1) {
-    const end = addDays(stages[idx + 1].date, -1)
+    const end = previousTradingDay(addTradingDays(stages[idx + 1].date, -1))
     return end < stages[idx].date ? stages[idx].date : end
   }
-  return target.endDate || today()
+  return previousTradingDay(target.endDate || today())
 }
 
 function countTradingDays(start: string, end: string): number {
@@ -682,9 +698,9 @@ const globalRange = computed(() => {
   const starts = targets.flatMap(t => getStages(t).map(s => s.date))
   const ends = targets.map(t => t.endDate || today())
   if (starts.length === 0) {
-    return { start: today(), end: today() }
+    const end = previousTradingDay(today())
+    return { start: addTradingDays(end, -29), end }
   }
-  const start = starts.reduce((a, b) => a < b ? a : b)
   let end = ends.reduce((a, b) => a > b ? a : b)
   const lastStageDates = targets.map(t => {
     const stages = getStages(t)
@@ -692,17 +708,43 @@ const globalRange = computed(() => {
   })
   const maxStage = lastStageDates.reduce((a, b) => a > b ? a : b)
   if (maxStage > end) end = maxStage
+  end = previousTradingDay(end)
+
+  // 个股模块使用固定 30 个交易日的滚动窗口，避免最早标的把时间轴不断拉长。
+  if (props.embedded) {
+    return { start: addTradingDays(end, -29), end }
+  }
+
+  const start = previousTradingDay(starts.reduce((a, b) => a < b ? a : b))
   return { start, end }
 })
 
 function laneSegments(target: IndependentTarget) {
   const stages = getStages(target)
-  const total = dateDiffDays(globalRange.value.start, globalRange.value.end)
+  if (props.embedded) {
+    const total = countTradingDays(globalRange.value.start, globalRange.value.end)
+    return stages.map((stage, idx) => {
+      const stageEnd = getStageEnd(target, idx)
+      const start = stage.date < globalRange.value.start ? globalRange.value.start : stage.date
+      const end = stageEnd > globalRange.value.end ? globalRange.value.end : stageEnd
+      const left = (countTradingDays(globalRange.value.start, start) - 1) / total * 100
+      const width = countTradingDays(start, end) / total * 100
+      return {
+        stage,
+        start: stage.date,
+        end: stageEnd,
+        left: Math.max(0, Math.min(100, left)),
+        width: Math.max(0.5, Math.min(100 - Math.max(0, left), width))
+      }
+    })
+  }
+
+  const total = countTradingDays(globalRange.value.start, globalRange.value.end)
   return stages.map((stage, idx) => {
     const start = stage.date
     const end = getStageEnd(target, idx)
-    const left = (dateDiffDays(globalRange.value.start, start) - 1) / total * 100
-    const width = dateDiffDays(start, end) / total * 100
+    const left = (countTradingDays(globalRange.value.start, start) - 1) / total * 100
+    const width = countTradingDays(start, end) / total * 100
     return {
       stage,
       start,

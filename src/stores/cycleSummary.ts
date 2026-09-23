@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { CycleSummary, CyclePhaseHistory, TradeStyleHistory } from '@/types'
+import type { CycleSummary, CyclePhaseHistory, TradeStyleHistory, IndependentTarget, IndependentLabel } from '@/types'
 import { loadData, saveData, generateId } from '@/composables/useStorage'
 
 export const useCycleSummaryStore = defineStore('cycleSummary', () => {
@@ -36,6 +36,8 @@ export const useCycleSummaryStore = defineStore('cycleSummary', () => {
     description?: string
     cyclePhaseSnapshot: CyclePhaseHistory[]
     tradeStyleSnapshot: TradeStyleHistory[]
+    independentTargetSnapshot?: IndependentTarget[]
+    independentLabelSnapshot?: IndependentLabel[]
   }): CycleSummary {
     const now = new Date().toISOString()
     const summary: CycleSummary = {
@@ -47,6 +49,8 @@ export const useCycleSummaryStore = defineStore('cycleSummary', () => {
       summary: '',
       cyclePhaseSnapshot: payload.cyclePhaseSnapshot,
       tradeStyleSnapshot: payload.tradeStyleSnapshot,
+      independentTargetSnapshot: payload.independentTargetSnapshot || [],
+      independentLabelSnapshot: payload.independentLabelSnapshot || [],
       createdAt: now,
       updatedAt: now
     }
