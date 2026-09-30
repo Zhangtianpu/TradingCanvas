@@ -73,6 +73,22 @@ export interface TradeRecord {
   note: string
 }
 
+// 模式挖掘中的虚拟交易。与个股 trades 完全分离，不参与真实持仓计算。
+export interface PatternTrade {
+  id: string
+  modeId: string
+  stockName: string
+  stockCode?: string
+  buyDate: string
+  buyPrice: number
+  sellDate?: string
+  sellPrice?: number
+  quantity: number
+  note: string
+  createdAt: string
+  updatedAt: string
+}
+
 // 个股
 export interface Stock {
   id: string
@@ -290,6 +306,7 @@ export interface AppStorage {
   cycleSummaries: CycleSummary[]
   independentTargets: IndependentTarget[]
   independentLabels: IndependentLabel[]
+  patternTrades: PatternTrade[]
   settings: AppSettings
   appVersion: string
   lastBackupDate: string

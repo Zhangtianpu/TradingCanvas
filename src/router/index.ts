@@ -44,6 +44,11 @@ const router = createRouter({
       component: () => import('@/pages/TradeModeManage.vue')
     },
     {
+      path: '/pattern-mining',
+      name: 'pattern-mining',
+      component: () => import('@/pages/PatternMining.vue')
+    },
+    {
       path: '/cycle-summary',
       name: 'cycle-summary',
       component: () => import('@/pages/CycleSummary.vue')

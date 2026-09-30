@@ -94,6 +94,7 @@ function createDefaultData(): AppStorage {
     cycleSummaries: [],
     independentTargets: [],
     independentLabels: getDefaultIndependentLabels(),
+    patternTrades: [],
     settings: getDefaultSettings(),
     appVersion: APP_VERSION,
     lastBackupDate: ''
@@ -328,6 +329,7 @@ export function generateTestData(): AppStorage {
     cycleSummaries: [],
     independentTargets: [],
     independentLabels: getDefaultIndependentLabels(),
+    patternTrades: [],
     settings: getDefaultSettings(),
     appVersion: APP_VERSION,
     lastBackupDate: ''
@@ -346,6 +348,7 @@ export function loadData(): AppStorage {
       ...data,
       customTradeStyles: data.customTradeStyles ?? defaults.customTradeStyles,
       customCyclePhases: data.customCyclePhases ?? defaults.customCyclePhases,
+      patternTrades: data.patternTrades ?? [],
       appVersion: APP_VERSION
     }
   } catch {
