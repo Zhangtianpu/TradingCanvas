@@ -44,7 +44,8 @@
       <div class="stock-fields">
         <input v-model.trim="form.name" required placeholder="锚定标的名称 *" />
         <input v-model.trim="form.code" placeholder="代码（可选）" />
-        <input v-model.trim="form.note" placeholder="竞价、开盘走势备注（可选）" />
+        <input v-model.trim="form.theme" placeholder="所属题材（可选）" />
+        <input v-model.trim="form.note" class="note-input" placeholder="竞价、开盘走势备注（可选）" />
       </div>
       <div class="level-picker compact">
         <span>开盘判断</span>
@@ -76,13 +77,14 @@
       <div v-if="currentRecord?.items.length" class="anchor-table-wrap">
         <table>
           <thead>
-            <tr><th>标的</th><th>开盘判断</th><th>收盘实际</th><th>复核</th><th></th></tr>
+            <tr><th>标的 / 题材</th><th>开盘判断</th><th>收盘实际</th><th>复核</th><th></th></tr>
           </thead>
           <tbody>
             <tr v-for="item in currentRecord.items" :key="item.id">
-              <td class="stock-cell">
-                <b>{{ item.name }}</b><span>{{ item.code || '—' }}</span>
+              <td class="stock-cell" :class="{ editable: !currentRecord.finalizedAt }" @click="!currentRecord.finalizedAt && openEditor(item)">
+                <b>{{ item.name }}</b><span>{{ item.code || '—' }}<i v-if="item.theme">{{ item.theme }}</i></span>
                 <small v-if="item.note" :title="item.note">{{ item.note }}</small>
+                <small v-else-if="!currentRecord.finalizedAt" class="edit-hint">点击添加或修改备注</small>
               </td>
               <td>
                 <div class="level-picker table-picker">
@@ -112,7 +114,11 @@
                 </span>
                 <span v-else class="pending">待复核</span>
               </td>
-              <td><button v-if="!currentRecord.finalizedAt" class="delete-button" title="删除" @click="removeAnchor(item.id)">×</button></td>
+              <td class="row-actions" v-if="!currentRecord.finalizedAt">
+                <button class="edit-button" title="编辑标的信息和备注" @click="openEditor(item)">编辑</button>
+                <button class="delete-button" title="删除" @click="removeAnchor(item.id)">×</button>
+              </td>
+              <td v-else></td>
             </tr>
           </tbody>
         </table>
@@ -154,12 +160,31 @@
       <div v-else class="empty-history">完成第一天的情绪锚定后，这里会形成可回看的判断档案。</div>
     </div>
     <router-link v-else to="/emotion-anchor" class="manage-anchor-link">查看完整历史与计分规则 →</router-link>
+
+    <div v-if="editingId" class="modal-overlay" @click.self="closeEditor">
+      <form class="anchor-edit-modal" @submit.prevent="saveEditor">
+        <div class="edit-modal-header">
+          <div><small>ANCHOR DETAIL</small><h3>编辑锚定标的</h3></div>
+          <button type="button" @click="closeEditor">×</button>
+        </div>
+        <label><span>标的名称 *</span><input v-model.trim="editForm.name" required /></label>
+        <div class="edit-form-row">
+          <label><span>股票代码</span><input v-model.trim="editForm.code" placeholder="可选" /></label>
+          <label><span>所属题材</span><input v-model.trim="editForm.theme" placeholder="如：人工智能、机器人" /></label>
+        </div>
+        <label><span>竞价及开盘备注</span><textarea v-model.trim="editForm.note" rows="4" placeholder="补充竞价表现、开盘承接、量价变化等观察"></textarea></label>
+        <div class="edit-modal-actions">
+          <button type="button" class="cancel-button" @click="closeEditor">取消</button>
+          <button type="submit" class="save-edit-button">保存修改</button>
+        </div>
+      </form>
+    </div>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import type { EmotionAnchorDaily, EmotionAnchorLevel } from '@/types'
+import type { EmotionAnchorDaily, EmotionAnchorItem, EmotionAnchorLevel } from '@/types'
 import { useEmotionAnchorStore } from '@/stores/emotionAnchor'
 
 withDefaults(defineProps<{
@@ -179,7 +204,9 @@ const localDateString = () => {
 const today = localDateString()
 const activeDate = ref(today)
 const closingNote = ref('')
-const form = reactive({ name: '', code: '', note: '', openingLevel: 'match' as EmotionAnchorLevel })
+const form = reactive({ name: '', code: '', theme: '', note: '', openingLevel: 'match' as EmotionAnchorLevel })
+const editingId = ref<string | null>(null)
+const editForm = reactive({ name: '', code: '', theme: '', note: '' })
 const levelOptions: Array<{ value: EmotionAnchorLevel; label: string; short: string }> = [
   { value: 'above', label: '超预期', short: '超' },
   { value: 'match', label: '符合预期', short: '符' },
@@ -198,10 +225,31 @@ function addAnchor() {
   store.addAnchor(activeDate.value, {
     name: form.name,
     code: form.code || undefined,
+    theme: form.theme || undefined,
     note: form.note,
     openingLevel: form.openingLevel
   })
-  Object.assign(form, { name: '', code: '', note: '', openingLevel: 'match' })
+  Object.assign(form, { name: '', code: '', theme: '', note: '', openingLevel: 'match' })
+}
+
+function openEditor(item: EmotionAnchorItem) {
+  editingId.value = item.id
+  Object.assign(editForm, { name: item.name, code: item.code || '', theme: item.theme || '', note: item.note || '' })
+}
+
+function closeEditor() {
+  editingId.value = null
+}
+
+function saveEditor() {
+  if (!editingId.value || !editForm.name) return
+  store.updateAnchor(activeDate.value, editingId.value, {
+    name: editForm.name,
+    code: editForm.code || undefined,
+    theme: editForm.theme || undefined,
+    note: editForm.note
+  })
+  closeEditor()
 }
 
 function toggleClosingLevel(id: string, level: EmotionAnchorLevel, current?: EmotionAnchorLevel) {
@@ -269,7 +317,7 @@ function emotionClass(label: string) {
 .rule-tip { margin-top: 8px; padding: 8px 11px; color: var(--text-tertiary); background: rgba(88,166,255,.06); border: 1px solid rgba(88,166,255,.14); border-radius: 6px; font-size: 10px; }
 .rule-tip span { margin-right: 7px; color: var(--color-blue); font-weight: 600; }
 .add-form { display: grid; grid-template-columns: minmax(300px, 1fr) auto auto; align-items: end; gap: 10px; margin-top: 14px; padding: 12px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 8px; }
-.stock-fields { display: grid; grid-template-columns: 1fr .7fr 1.5fr; gap: 7px; }
+.stock-fields { display: grid; grid-template-columns: 1fr .7fr .9fr 1.5fr; gap: 7px; }
 .stock-fields input { width: 100%; padding: 7px 9px; }
 .level-picker { display: flex; align-items: center; gap: 4px; }
 .level-picker > span { margin-right: 3px; color: var(--text-tertiary); font-size: 10px; }
@@ -289,18 +337,37 @@ function emotionClass(label: string) {
 .list-heading small, .history-heading span { color: var(--text-tertiary); font-size: 10px; }
 .anchor-table-wrap { overflow-x: auto; }
 table { width: 100%; min-width: 730px; border-collapse: collapse; }
-th, td { padding: 9px 8px; border-bottom: 1px solid var(--border-color); text-align: left; font-size: 11px; }
-th { color: var(--text-tertiary); font-weight: 500; }
+th, td { padding: 11px 9px; border-bottom: 1px solid var(--border-color); text-align: left; font-size: 13px; }
+th { color: var(--text-tertiary); font-size: 12px; font-weight: 500; }
 .stock-cell b, .stock-cell span, .stock-cell small { display: block; }
-.stock-cell span { margin-top: 2px; color: var(--text-tertiary); font-size: 10px; }
-.stock-cell small { max-width: 260px; margin-top: 3px; overflow: hidden; color: var(--text-secondary); text-overflow: ellipsis; white-space: nowrap; }
-.table-picker button { width: 30px; padding: 4px; }
-.review-result { padding: 3px 7px; border-radius: 10px; font-size: 10px; }
+.stock-cell b { font-size: 15px; line-height: 1.35; }
+.stock-cell span { margin-top: 3px; color: var(--text-tertiary); font-size: 12px; }
+.stock-cell span i { display: inline-block; margin-left: 6px; padding: 1px 6px; color: var(--color-purple); background: rgba(188,140,255,.1); border-radius: 8px; font-style: normal; }
+.stock-cell small { max-width: 320px; margin-top: 5px; overflow: hidden; color: var(--text-secondary); font-size: 12px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.stock-cell.editable { cursor: pointer; }
+.stock-cell.editable:hover b { color: var(--color-blue); }
+.stock-cell .edit-hint { color: var(--color-blue); opacity: .75; }
+.table-picker button { width: 34px; padding: 5px; font-size: 12px; }
+.review-result { padding: 4px 8px; border-radius: 10px; font-size: 11px; }
 .review-result.correct { color: var(--color-green); background: rgba(63,185,80,.12); }
 .review-result.wrong { color: var(--color-orange); background: rgba(240,136,62,.12); }
 .pending { color: var(--text-tertiary); }
 .delete-button { padding: 2px 7px; color: var(--text-tertiary); background: transparent; font-size: 18px; }
 .delete-button:hover { color: var(--color-red); }
+.row-actions { white-space: nowrap; }
+.edit-button { padding: 5px 8px; color: var(--color-blue); background: rgba(88,166,255,.1); font-size: 11px; }
+.anchor-edit-modal { width: min(520px, calc(100vw - 32px)); padding: 18px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+.edit-modal-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 15px; }
+.edit-modal-header small { color: var(--color-purple); font-size: 9px; letter-spacing: .12em; }
+.edit-modal-header h3 { margin-top: 3px; font-size: 16px; }
+.edit-modal-header > button { padding: 1px 7px; color: var(--text-tertiary); background: transparent; font-size: 20px; }
+.anchor-edit-modal > label, .edit-form-row label { display: block; }
+.anchor-edit-modal label > span { display: block; margin-bottom: 5px; color: var(--text-secondary); font-size: 11px; }
+.anchor-edit-modal input, .anchor-edit-modal textarea { width: 100%; }
+.edit-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 11px 0; }
+.edit-modal-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 14px; }
+.cancel-button { color: var(--text-secondary); background: transparent; border: 1px solid var(--border-color); }
+.save-edit-button { color: #fff; background: var(--color-blue); }
 .empty-state-small, .empty-history { padding: 22px; color: var(--text-tertiary); background: var(--bg-tertiary); border-radius: 7px; text-align: center; font-size: 11px; }
 .closing-review { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; margin-top: 12px; padding: 12px; background: rgba(188,140,255,.05); border: 1px solid rgba(188,140,255,.18); border-radius: 8px; }
 .closing-review > div span { display: block; margin-top: 3px; color: var(--text-tertiary); font-size: 10px; }
@@ -330,6 +397,7 @@ th { color: var(--text-tertiary); font-weight: 500; }
   .overview { grid-template-columns: repeat(2, 1fr); }
   .stock-fields { grid-template-columns: 1fr; }
   .stock-fields input:last-child { grid-column: auto; }
+  .edit-form-row { grid-template-columns: 1fr; }
   .compact { flex-wrap: wrap; }
   .history-list button { grid-template-columns: 1fr 1fr 1fr; }
   .history-list i { justify-self: start; }

@@ -129,7 +129,7 @@
             </div>
             <div class="anchor-item-list">
               <div v-for="item in record.items" :key="item.id">
-                <span class="anchor-stock"><b>{{ item.name }}</b><small>{{ item.code || '—' }}</small></span>
+                <span class="anchor-stock"><b>{{ item.name }}</b><small>{{ item.code || '—' }} · {{ item.theme || '未填题材' }}</small></span>
                 <span>{{ anchorLevelLabel(item.openingLevel) }}</span>
                 <i>→</i>
                 <span>{{ item.closingLevel ? anchorLevelLabel(item.closingLevel) : '待复核' }}</span>

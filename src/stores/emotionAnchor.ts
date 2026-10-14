@@ -53,11 +53,20 @@ export const useEmotionAnchorStore = defineStore('emotionAnchor', () => {
     return record
   }
 
-  function addAnchor(date: string, payload: Pick<EmotionAnchorItem, 'name' | 'code' | 'openingLevel' | 'note'>) {
+  function addAnchor(date: string, payload: Pick<EmotionAnchorItem, 'name' | 'code' | 'theme' | 'openingLevel' | 'note'>) {
     const record = ensureRecord(date)
     const now = new Date().toISOString()
     record.items.push({ ...payload, id: generateId(), createdAt: now, updatedAt: now })
     record.updatedAt = now
+    persist()
+  }
+
+  function updateAnchor(date: string, id: string, updates: Pick<EmotionAnchorItem, 'name' | 'code' | 'theme' | 'note'>) {
+    const record = records.value.find(item => item.date === date)
+    const anchor = record?.items.find(item => item.id === id)
+    if (!record || !anchor) return
+    Object.assign(anchor, updates, { updatedAt: new Date().toISOString() })
+    record.updatedAt = anchor.updatedAt
     persist()
   }
 
@@ -156,6 +165,7 @@ export const useEmotionAnchorStore = defineStore('emotionAnchor', () => {
     overallAccuracy,
     ensureRecord,
     addAnchor,
+    updateAnchor,
     updateOpeningLevel,
     updateClosingLevel,
     deleteAnchor,

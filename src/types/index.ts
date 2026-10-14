@@ -96,6 +96,7 @@ export interface EmotionAnchorItem {
   id: string
   name: string
   code?: string
+  theme?: string
   openingLevel: EmotionAnchorLevel
   closingLevel?: EmotionAnchorLevel
   note: string
