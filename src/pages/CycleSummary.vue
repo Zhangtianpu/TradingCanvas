@@ -48,6 +48,7 @@
           </div>
           <div class="card-footer">
             <span class="footer-stat">情绪数据：{{ getCycleEmotionCount(cycle) }} 天</span>
+            <span class="footer-stat">情绪锚定：{{ getCycleAnchorCount(cycle) }} 天</span>
             <span class="footer-stat">活跃题材：{{ getCycleThemeCount(cycle) }} 个</span>
             <span class="footer-stat">已平仓：{{ getCycleClosedCount(cycle) }} 笔</span>
           </div>
@@ -93,6 +94,53 @@
           :targets="currentCycle.independentTargetSnapshot"
           :labels="currentCycle.independentLabelSnapshot || []"
         />
+      </div>
+
+      <!-- 情绪锚定快照 -->
+      <div v-if="cycleAnchorRecords.length > 0" class="detail-section anchor-snapshot-section">
+        <div class="section-header">
+          <div class="section-title">情绪锚定</div>
+          <span class="range-tag">{{ cycleAnchorRecords.length }} 天 · {{ cycleAnchorSummary.anchors }} 个标的</span>
+        </div>
+        <div class="anchor-summary-grid">
+          <div><span>周期锚定天数</span><strong>{{ cycleAnchorRecords.length }}</strong><small>天</small></div>
+          <div><span>累计标的</span><strong>{{ cycleAnchorSummary.anchors }}</strong><small>个</small></div>
+          <div><span>已复核判断</span><strong>{{ cycleAnchorSummary.reviewed }}</strong><small>次</small></div>
+          <div><span>判断正确</span><strong>{{ cycleAnchorSummary.correct }}</strong><small>次</small></div>
+          <div class="accuracy"><span>周期正确率</span><strong>{{ formatAnchorAccuracy(cycleAnchorSummary.accuracy, cycleAnchorSummary.reviewed) }}</strong></div>
+        </div>
+        <div class="anchor-rule-note">
+          快照计分：超预期 {{ anchorSnapshotSettings.aboveScore }} 分 · 符合预期 {{ anchorSnapshotSettings.matchScore }} 分 · 低预期 {{ anchorSnapshotSettings.belowScore }} 分
+        </div>
+        <div class="anchor-day-list">
+          <div v-for="record in cycleAnchorRecords" :key="record.id" class="anchor-day-card">
+            <div class="anchor-day-head">
+              <div><b>{{ record.date }}</b><span v-if="record.finalizedAt">已归档</span><span v-else class="pending">未归档</span></div>
+              <div class="anchor-day-result">
+                <strong :class="anchorEmotionClass(getSnapshotAnchorStats(record).label)">{{ getSnapshotAnchorStats(record).label }}</strong>
+                <span>得分 {{ getSnapshotAnchorStats(record).score }}</span>
+              </div>
+            </div>
+            <div class="anchor-day-stats">
+              <span class="above">超 {{ getSnapshotAnchorStats(record).above }}</span>
+              <span class="match">符 {{ getSnapshotAnchorStats(record).match }}</span>
+              <span class="below">低 {{ getSnapshotAnchorStats(record).below }}</span>
+              <span>正确率 {{ formatAnchorAccuracy(getSnapshotAnchorStats(record).accuracy, getSnapshotAnchorStats(record).reviewed) }}</span>
+            </div>
+            <div class="anchor-item-list">
+              <div v-for="item in record.items" :key="item.id">
+                <span class="anchor-stock"><b>{{ item.name }}</b><small>{{ item.code || '—' }}</small></span>
+                <span>{{ anchorLevelLabel(item.openingLevel) }}</span>
+                <i>→</i>
+                <span>{{ item.closingLevel ? anchorLevelLabel(item.closingLevel) : '待复核' }}</span>
+                <em v-if="item.closingLevel" :class="item.closingLevel === item.openingLevel ? 'correct' : 'wrong'">
+                  {{ item.closingLevel === item.openingLevel ? '正确' : '偏差' }}
+                </em>
+              </div>
+            </div>
+            <p v-if="record.closingNote">收盘复盘：{{ record.closingNote }}</p>
+          </div>
+        </div>
       </div>
 
       <!-- 周期概要 -->
@@ -345,9 +393,9 @@ import { useReviewStore } from '@/stores/review'
 import { useCustomTradeStyleStore } from '@/stores/customTradeStyle'
 import { useCustomCyclePhaseStore } from '@/stores/customCyclePhase'
 import { useToast } from '@/composables/useToast'
-import { loadData } from '@/composables/useStorage'
+import { getDefaultEmotionAnchorSettings, loadData } from '@/composables/useStorage'
 import { today } from '@/composables/useDate'
-import type { CycleSummary as CycleSummaryType, CyclePhaseHistory, TradeStyleHistory, EmotionDaily, TradeRecord, Stock, IndependentTarget, IndependentStage, IndependentLabelCategory } from '@/types'
+import type { CycleSummary as CycleSummaryType, CyclePhaseHistory, TradeStyleHistory, EmotionDaily, TradeRecord, Stock, IndependentTarget, IndependentStage, IndependentLabelCategory, EmotionAnchorDaily, EmotionAnchorLevel } from '@/types'
 
 ChartJS.register(
   CategoryScale,
@@ -431,6 +479,50 @@ const currentCycle = computed<CycleSummaryType | null>(() => {
   if (!id) return null
   return cycleSummaryStore.getById(id)
 })
+
+const cycleAnchorRecords = computed(() => [...(currentCycle.value?.emotionAnchorSnapshot || [])]
+  .sort((a, b) => a.date.localeCompare(b.date)))
+
+const anchorSnapshotSettings = computed(() => currentCycle.value?.emotionAnchorSettingsSnapshot || getDefaultEmotionAnchorSettings())
+
+function getSnapshotAnchorStats(record: EmotionAnchorDaily) {
+  const above = record.items.filter(item => item.openingLevel === 'above').length
+  const match = record.items.filter(item => item.openingLevel === 'match').length
+  const below = record.items.filter(item => item.openingLevel === 'below').length
+  const settings = anchorSnapshotSettings.value
+  const totalScore = above * settings.aboveScore + match * settings.matchScore + below * settings.belowScore
+  const score = record.items.length ? Math.round(totalScore / record.items.length) : settings.matchScore
+  const label = score >= settings.strongRepairMin ? '强修复'
+    : score >= settings.weakRepairMin ? '弱修复'
+      : score >= settings.weakDivergeMin ? '弱分歧' : '强分歧'
+  const reviewed = record.items.filter(item => item.closingLevel !== undefined)
+  const correct = reviewed.filter(item => item.closingLevel === item.openingLevel).length
+  return { above, match, below, score, label, reviewed: reviewed.length, correct, accuracy: reviewed.length ? correct / reviewed.length * 100 : 0 }
+}
+
+const cycleAnchorSummary = computed(() => {
+  const items = cycleAnchorRecords.value.flatMap(record => record.items)
+  const reviewed = items.filter(item => item.closingLevel !== undefined)
+  const correct = reviewed.filter(item => item.closingLevel === item.openingLevel).length
+  return {
+    anchors: items.length,
+    reviewed: reviewed.length,
+    correct,
+    accuracy: reviewed.length ? correct / reviewed.length * 100 : 0
+  }
+})
+
+function anchorLevelLabel(level: EmotionAnchorLevel) {
+  return { above: '超预期', match: '符合预期', below: '低预期' }[level]
+}
+
+function formatAnchorAccuracy(value: number, reviewed: number) {
+  return reviewed ? `${value.toFixed(1)}%` : '—'
+}
+
+function anchorEmotionClass(label: string) {
+  return { '强修复': 'strong-repair', '弱修复': 'weak-repair', '弱分歧': 'weak-diverge', '强分歧': 'strong-diverge' }[label] || ''
+}
 
 // 周期内的情绪数据（按日期升序）
 const cycleEmotions = computed<EmotionDaily[]>(() => {
@@ -923,6 +1015,10 @@ function countTradingDays(startDate: string, endDate: string): number {
 
 function getCycleEmotionCount(cycle: CycleSummaryType): number {
   return emotionStore.emotions.filter(e => e.date >= cycle.startDate && e.date <= cycle.endDate).length
+}
+
+function getCycleAnchorCount(cycle: CycleSummaryType): number {
+  return cycle.emotionAnchorSnapshot?.length || 0
 }
 
 function getCycleThemeCount(cycle: CycleSummaryType): number {
@@ -1498,6 +1594,64 @@ async function handleDelete() {
   border-left: 3px solid var(--color-orange);
 }
 
+.anchor-snapshot-section { border-left: 3px solid var(--color-purple); }
+
+.anchor-summary-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+
+.anchor-summary-grid > div { padding: 10px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; }
+
+.anchor-summary-grid span { display: block; margin-bottom: 5px; color: var(--text-tertiary); font-size: 10px; }
+
+.anchor-summary-grid strong { font-size: 18px; }
+
+.anchor-summary-grid small { margin-left: 3px; color: var(--text-tertiary); }
+
+.anchor-summary-grid .accuracy strong { color: var(--color-blue); }
+
+.anchor-rule-note { margin: 8px 0 10px; padding: 7px 9px; color: var(--text-tertiary); background: rgba(188,140,255,.06); border-radius: 5px; font-size: 10px; }
+
+.anchor-day-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+
+.anchor-day-card { padding: 10px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 7px; }
+
+.anchor-day-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+
+.anchor-day-head > div:first-child span { display: block; margin-top: 2px; color: var(--color-green); font-size: 9px; }
+
+.anchor-day-head > div:first-child span.pending { color: var(--color-gold); }
+
+.anchor-day-result { text-align: right; }
+
+.anchor-day-result strong, .anchor-day-result span { display: block; }
+
+.anchor-day-result span { margin-top: 2px; color: var(--text-tertiary); font-size: 9px; }
+
+.strong-repair { color: var(--color-red); }
+.weak-repair { color: var(--color-orange); }
+.weak-diverge { color: var(--color-blue); }
+.strong-diverge { color: var(--color-green); }
+
+.anchor-day-stats { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0; }
+
+.anchor-day-stats span { padding: 2px 6px; color: var(--text-secondary); background: var(--bg-secondary); border-radius: 4px; font-size: 9px; }
+
+.anchor-day-stats .above { color: var(--color-red); }
+.anchor-day-stats .match { color: var(--color-gold); }
+.anchor-day-stats .below { color: var(--color-green); }
+
+.anchor-item-list { border-top: 1px solid var(--border-color); }
+
+.anchor-item-list > div { display: grid; grid-template-columns: 1.2fr 70px 14px 70px 42px; align-items: center; gap: 5px; padding: 6px 0; border-bottom: 1px solid rgba(48,54,61,.55); color: var(--text-secondary); font-size: 10px; }
+
+.anchor-stock b, .anchor-stock small { display: block; }
+.anchor-stock b { color: var(--text-primary); }
+.anchor-stock small { margin-top: 1px; color: var(--text-tertiary); }
+.anchor-item-list i { color: var(--text-tertiary); font-style: normal; }
+.anchor-item-list em { padding: 2px 5px; border-radius: 8px; font-style: normal; text-align: center; }
+.anchor-item-list em.correct { color: var(--color-green); background: rgba(63,185,80,.1); }
+.anchor-item-list em.wrong { color: var(--color-orange); background: rgba(240,136,62,.1); }
+.anchor-day-card p { margin-top: 7px; color: var(--text-tertiary); font-size: 10px; line-height: 1.5; }
+
 .snapshot-list {
   display: flex;
   flex-direction: column;
@@ -1711,6 +1865,9 @@ async function handleDelete() {
 }
 
 @media (max-width: 768px) {
+  .anchor-summary-grid { grid-template-columns: repeat(2, 1fr); }
+  .anchor-summary-grid .accuracy { grid-column: 1 / -1; }
+  .anchor-day-list { grid-template-columns: 1fr; }
   .charts-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 8px;

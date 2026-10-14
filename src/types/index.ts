@@ -89,6 +89,39 @@ export interface PatternTrade {
   updatedAt: string
 }
 
+// 情绪锚定：开盘预判与收盘实际表现使用同一套分级，便于自动复核。
+export type EmotionAnchorLevel = 'above' | 'match' | 'below'
+
+export interface EmotionAnchorItem {
+  id: string
+  name: string
+  code?: string
+  openingLevel: EmotionAnchorLevel
+  closingLevel?: EmotionAnchorLevel
+  note: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface EmotionAnchorDaily {
+  id: string
+  date: string
+  items: EmotionAnchorItem[]
+  closingNote: string
+  finalizedAt?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface EmotionAnchorSettings {
+  aboveScore: number
+  matchScore: number
+  belowScore: number
+  strongRepairMin: number
+  weakRepairMin: number
+  weakDivergeMin: number
+}
+
 // 个股
 export interface Stock {
   id: string
@@ -288,6 +321,8 @@ export interface CycleSummary {
   // 周期内个股分析快照与对应标签定义
   independentTargetSnapshot?: IndependentTarget[]
   independentLabelSnapshot?: IndependentLabel[]
+  emotionAnchorSnapshot?: EmotionAnchorDaily[]
+  emotionAnchorSettingsSnapshot?: EmotionAnchorSettings
   createdAt: string
   updatedAt: string
 }
@@ -307,6 +342,8 @@ export interface AppStorage {
   independentTargets: IndependentTarget[]
   independentLabels: IndependentLabel[]
   patternTrades: PatternTrade[]
+  emotionAnchors: EmotionAnchorDaily[]
+  emotionAnchorSettings: EmotionAnchorSettings
   settings: AppSettings
   appVersion: string
   lastBackupDate: string

@@ -49,6 +49,11 @@ const router = createRouter({
       component: () => import('@/pages/PatternMining.vue')
     },
     {
+      path: '/emotion-anchor',
+      name: 'emotion-anchor',
+      component: () => import('@/pages/EmotionAnchor.vue')
+    },
+    {
       path: '/cycle-summary',
       name: 'cycle-summary',
       component: () => import('@/pages/CycleSummary.vue')

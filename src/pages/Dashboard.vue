@@ -45,6 +45,11 @@
           <PositionCard />
         </template>
 
+        <!-- 情绪锚定 -->
+        <template v-else-if="module.id === 'emotionAnchor'">
+          <EmotionAnchorPanel :show-history="false" :show-rule="false" />
+        </template>
+
         <!-- 连板楼梯图 -->
         <template v-else-if="module.id === 'stairChart'">
           <StairChart v-if="allSortedEmotions.length > 0" :emotions="allSortedEmotions" title="连板楼梯图" chartId="stairChart1" />
@@ -165,6 +170,7 @@ import ThemeTree from '@/components/ThemeTree.vue'
 import CyclePanel from '@/components/CyclePanel.vue'
 import StockFlowPanel from '@/components/StockFlowPanel.vue'
 import PositionCard from '@/components/PositionCard.vue'
+import EmotionAnchorPanel from '@/components/EmotionAnchorPanel.vue'
 
 // 注册Chart.js组件
 ChartJS.register(
@@ -192,6 +198,7 @@ interface DashboardModule {
 
 const defaultModules: DashboardModule[] = [
   { id: 'spaceBoard', name: '空间板' },
+  { id: 'emotionAnchor', name: '情绪锚定' },
   { id: 'positions', name: '持仓概览' },
   { id: 'stairChart', name: '连板楼梯图' },
   { id: 'stairChart2', name: '连板楼梯图2' },

@@ -133,6 +133,14 @@
               </template>
             </div>
           </div>
+          <div class="cycle-preview anchor-preview" v-if="emotionAnchorPreview.length > 0">
+            <div class="preview-title">情绪锚定（将一同保存）</div>
+            <div class="anchor-preview-stats">
+              <span>{{ emotionAnchorPreview.length }} 天记录</span>
+              <span>{{ emotionAnchorPreview.reduce((sum, record) => sum + record.items.length, 0) }} 个标的</span>
+              <span>{{ anchorPreviewReviewed }} 次已复核</span>
+            </div>
+          </div>
         </div>
         <div class="modal-footer">
           <button class="btn-cancel" @click="closeSaveCycleDialog">取消</button>
@@ -177,6 +185,7 @@ import { useCustomTradeStyleStore } from '@/stores/customTradeStyle'
 import { useCustomCyclePhaseStore } from '@/stores/customCyclePhase'
 import { useIndependentTargetStore } from '@/stores/independentTarget'
 import { useIndependentLabelStore } from '@/stores/independentLabel'
+import { useEmotionAnchorStore } from '@/stores/emotionAnchor'
 import { useToast } from '@/composables/useToast'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import type { TradeStyle, CyclePhase, TradeStyleHistory, CyclePhaseHistory } from '@/types'
@@ -188,6 +197,7 @@ const customTradeStyleStore = useCustomTradeStyleStore()
 const customCyclePhaseStore = useCustomCyclePhaseStore()
 const independentTargetStore = useIndependentTargetStore()
 const independentLabelStore = useIndependentLabelStore()
+const emotionAnchorStore = useEmotionAnchorStore()
 const toast = useToast()
 
 // 从 store 动态读取交易风格选项
@@ -407,6 +417,16 @@ const cyclePhasePreview = computed<CyclePhaseHistory[]>(() => {
   return cycleStore.sortedCyclePhaseHistory.filter(h => h.date >= startDate && h.date <= endDate)
 })
 
+const emotionAnchorPreview = computed(() => {
+  const { startDate, endDate } = cycleForm.value
+  if (!startDate || !endDate) return []
+  return emotionAnchorStore.sortedRecords.filter(record => record.date >= startDate && record.date <= endDate)
+})
+
+const anchorPreviewReviewed = computed(() => emotionAnchorPreview.value
+  .flatMap(record => record.items)
+  .filter(item => item.closingLevel !== undefined).length)
+
 // 周期范围提示
 const cycleRangeHint = computed(() => {
   const { startDate, endDate } = cycleForm.value
@@ -443,6 +463,10 @@ function handleSaveCycle() {
     .map(t => JSON.parse(JSON.stringify(t)))
   const independentLabelSnapshot = independentLabelStore.labels
     .map(l => JSON.parse(JSON.stringify(l)))
+  const emotionAnchorSnapshot = emotionAnchorStore.sortedRecords
+    .filter(record => record.date >= startDate && record.date <= endDate)
+    .map(record => JSON.parse(JSON.stringify(record)))
+  const emotionAnchorSettingsSnapshot = JSON.parse(JSON.stringify(emotionAnchorStore.settings))
 
   const summary = cycleSummaryStore.createCycle({
     name: name.trim(),
@@ -452,7 +476,9 @@ function handleSaveCycle() {
     cyclePhaseSnapshot,
     tradeStyleSnapshot,
     independentTargetSnapshot,
-    independentLabelSnapshot
+    independentLabelSnapshot,
+    emotionAnchorSnapshot,
+    emotionAnchorSettingsSnapshot
   })
 
   toast.success(`周期「${summary.name}」已保存`)
@@ -872,6 +898,19 @@ function handleResetAll() {
   align-items: center;
   gap: 4px;
   flex-wrap: wrap;
+}
+
+.anchor-preview { border-left: 3px solid var(--color-purple); }
+
+.anchor-preview-stats { display: flex; flex-wrap: wrap; gap: 7px; }
+
+.anchor-preview-stats span {
+  padding: 3px 8px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 10px;
 }
 
 .preview-item {

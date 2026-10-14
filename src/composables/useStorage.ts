@@ -1,7 +1,18 @@
-import type { AppStorage, EmotionDaily, Theme, Stock, CustomTradeMode, CustomTradeStyle, CustomCyclePhase, AppSettings, IndependentLabel } from '@/types'
+import type { AppStorage, EmotionDaily, Theme, Stock, CustomTradeMode, CustomTradeStyle, CustomCyclePhase, AppSettings, IndependentLabel, EmotionAnchorSettings } from '@/types'
 
 const STORAGE_KEY = 'trading-canvas-data'
 const APP_VERSION = '1.0.0'
+
+export function getDefaultEmotionAnchorSettings(): EmotionAnchorSettings {
+  return {
+    aboveScore: 100,
+    matchScore: 50,
+    belowScore: 0,
+    strongRepairMin: 75,
+    weakRepairMin: 50,
+    weakDivergeMin: 25
+  }
+}
 
 // 默认设置
 function getDefaultSettings(): AppSettings {
@@ -95,6 +106,8 @@ function createDefaultData(): AppStorage {
     independentTargets: [],
     independentLabels: getDefaultIndependentLabels(),
     patternTrades: [],
+    emotionAnchors: [],
+    emotionAnchorSettings: getDefaultEmotionAnchorSettings(),
     settings: getDefaultSettings(),
     appVersion: APP_VERSION,
     lastBackupDate: ''
@@ -330,6 +343,8 @@ export function generateTestData(): AppStorage {
     independentTargets: [],
     independentLabels: getDefaultIndependentLabels(),
     patternTrades: [],
+    emotionAnchors: [],
+    emotionAnchorSettings: getDefaultEmotionAnchorSettings(),
     settings: getDefaultSettings(),
     appVersion: APP_VERSION,
     lastBackupDate: ''
@@ -349,6 +364,11 @@ export function loadData(): AppStorage {
       customTradeStyles: data.customTradeStyles ?? defaults.customTradeStyles,
       customCyclePhases: data.customCyclePhases ?? defaults.customCyclePhases,
       patternTrades: data.patternTrades ?? [],
+      emotionAnchors: data.emotionAnchors ?? [],
+      emotionAnchorSettings: {
+        ...defaults.emotionAnchorSettings,
+        ...(data.emotionAnchorSettings ?? {})
+      },
       appVersion: APP_VERSION
     }
   } catch {
