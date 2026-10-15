@@ -37,17 +37,51 @@ export const useEmotionAnchorStore = defineStore('emotionAnchor', () => {
 
   function ensureRecord(date = localDateString()) {
     let record = records.value.find(item => item.date === date)
+    const now = new Date().toISOString()
     if (!record) {
-      const now = new Date().toISOString()
+      const previousRecord = [...records.value]
+        .filter(item => item.date < date && item.items.length > 0)
+        .sort((a, b) => b.date.localeCompare(a.date))[0]
       record = {
         id: generateId(),
         date,
-        items: [],
+        items: previousRecord?.items.map(item => ({
+          id: generateId(),
+          name: item.name,
+          code: item.code,
+          theme: item.theme,
+          openingLevel: undefined,
+          closingLevel: undefined,
+          note: '',
+          createdAt: now,
+          updatedAt: now
+        })) || [],
         closingNote: '',
+        inheritedFromDate: previousRecord?.date,
+        inheritanceResolvedAt: now,
         createdAt: now,
         updatedAt: now
       }
       records.value.push(record)
+      persist()
+    } else if (!record.inheritanceResolvedAt && !record.finalizedAt && record.items.length === 0) {
+      const previousRecord = [...records.value]
+        .filter(item => item.date < date && item.items.length > 0)
+        .sort((a, b) => b.date.localeCompare(a.date))[0]
+      record.items = previousRecord?.items.map(item => ({
+        id: generateId(),
+        name: item.name,
+        code: item.code,
+        theme: item.theme,
+        openingLevel: undefined,
+        closingLevel: undefined,
+        note: '',
+        createdAt: now,
+        updatedAt: now
+      })) || []
+      record.inheritedFromDate = previousRecord?.date
+      record.inheritanceResolvedAt = now
+      record.updatedAt = now
       persist()
     }
     return record
@@ -119,12 +153,13 @@ export const useEmotionAnchorStore = defineStore('emotionAnchor', () => {
     const above = items.filter(item => item.openingLevel === 'above').length
     const match = items.filter(item => item.openingLevel === 'match').length
     const below = items.filter(item => item.openingLevel === 'below').length
-    const totalScore = items.reduce((sum, item) => {
+    const judged = items.filter(item => item.openingLevel !== undefined)
+    const totalScore = judged.reduce((sum, item) => {
       if (item.openingLevel === 'above') return sum + settings.value.aboveScore
       if (item.openingLevel === 'match') return sum + settings.value.matchScore
       return sum + settings.value.belowScore
     }, 0)
-    const score = items.length ? Math.round(totalScore / items.length) : settings.value.matchScore
+    const score = judged.length ? Math.round(totalScore / judged.length) : settings.value.matchScore
     const label: MarketEmotionLabel = score >= settings.value.strongRepairMin
       ? '强修复'
       : score >= settings.value.weakRepairMin
@@ -132,10 +167,11 @@ export const useEmotionAnchorStore = defineStore('emotionAnchor', () => {
         : score >= settings.value.weakDivergeMin
           ? '弱分歧'
           : '强分歧'
-    const reviewed = items.filter(item => item.closingLevel !== undefined)
+    const reviewed = items.filter(item => item.openingLevel !== undefined && item.closingLevel !== undefined)
     const correct = reviewed.filter(item => item.closingLevel === item.openingLevel).length
     return {
       total: items.length,
+      judged: judged.length,
       above,
       match,
       below,
@@ -149,7 +185,7 @@ export const useEmotionAnchorStore = defineStore('emotionAnchor', () => {
 
   const sortedRecords = computed(() => [...records.value].sort((a, b) => b.date.localeCompare(a.date)))
   const overallAccuracy = computed(() => {
-    const reviewed = records.value.flatMap(record => record.items).filter(item => item.closingLevel !== undefined)
+    const reviewed = records.value.flatMap(record => record.items).filter(item => item.openingLevel !== undefined && item.closingLevel !== undefined)
     const correct = reviewed.filter(item => item.closingLevel === item.openingLevel).length
     return {
       reviewed: reviewed.length,

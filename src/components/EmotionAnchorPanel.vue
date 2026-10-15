@@ -22,11 +22,11 @@
     <div class="overview">
       <div class="emotion-score" :class="emotionClass(dayStats.label)">
         <span>今日情绪</span>
-        <strong>{{ dayStats.total ? dayStats.label : '等待锚定' }}</strong>
+        <strong>{{ dayStats.judged ? dayStats.label : '等待判断' }}</strong>
         <div class="score-line">
           <i :style="{ width: `${dayStats.score}%` }"></i>
         </div>
-        <small>综合得分 {{ dayStats.total ? dayStats.score : '—' }}</small>
+        <small>综合得分 {{ dayStats.judged ? dayStats.score : '—' }}</small>
       </div>
       <div class="count-stat above"><span>超预期</span><strong>{{ dayStats.above }}</strong><small>个</small></div>
       <div class="count-stat match"><span>符合预期</span><strong>{{ dayStats.match }}</strong><small>个</small></div>
@@ -38,6 +38,11 @@
       <span>计分规则</span>
       超预期 {{ store.settings.aboveScore }} 分 · 符合预期 {{ store.settings.matchScore }} 分 · 低预期 {{ store.settings.belowScore }} 分；
       ≥{{ store.settings.strongRepairMin }} 强修复，≥{{ store.settings.weakRepairMin }} 弱修复，≥{{ store.settings.weakDivergeMin }} 弱分歧，其余为强分歧。
+    </div>
+
+    <div v-if="currentRecord?.inheritedFromDate" class="inherit-tip">
+      <span>已继承</span>
+      标的信息来自 {{ currentRecord.inheritedFromDate }}，开盘判断、收盘实际及备注均已清空，请根据今日盘面重新填写。
     </div>
 
     <form v-if="!currentRecord?.finalizedAt" class="add-form" @submit.prevent="addAnchor">
@@ -150,8 +155,8 @@
           @click="selectRecord(record)"
         >
           <span class="history-date">{{ record.date }}</span>
-          <b :class="emotionClass(store.stats(record).label)">{{ store.stats(record).label }}</b>
-          <span>得分 {{ store.stats(record).score }}</span>
+          <b :class="emotionClass(store.stats(record).label)">{{ store.stats(record).judged ? store.stats(record).label : '待判断' }}</b>
+          <span>得分 {{ store.stats(record).judged ? store.stats(record).score : '—' }}</span>
           <span>{{ store.stats(record).above }}/{{ store.stats(record).match }}/{{ store.stats(record).below }}</span>
           <span>正确率 {{ formatAccuracy(store.stats(record).accuracy, store.stats(record).reviewed) }}</span>
           <i :class="record.finalizedAt ? 'done' : 'open'">{{ record.finalizedAt ? '已归档' : '待完成' }}</i>
@@ -215,6 +220,10 @@ const levelOptions: Array<{ value: EmotionAnchorLevel; label: string; short: str
 
 const currentRecord = computed(() => store.records.find(record => record.date === activeDate.value))
 const dayStats = computed(() => store.stats(currentRecord.value))
+
+watch(activeDate, date => {
+  if (date) store.ensureRecord(date)
+}, { immediate: true })
 
 watch(currentRecord, record => {
   closingNote.value = record?.closingNote || ''
@@ -316,6 +325,8 @@ function emotionClass(label: string) {
 .strong-diverge { color: var(--color-green) !important; }
 .rule-tip { margin-top: 8px; padding: 8px 11px; color: var(--text-tertiary); background: rgba(88,166,255,.06); border: 1px solid rgba(88,166,255,.14); border-radius: 6px; font-size: 10px; }
 .rule-tip span { margin-right: 7px; color: var(--color-blue); font-weight: 600; }
+.inherit-tip { margin-top: 10px; padding: 9px 11px; color: var(--text-secondary); background: rgba(188,140,255,.07); border: 1px solid rgba(188,140,255,.2); border-radius: 6px; font-size: 11px; line-height: 1.5; }
+.inherit-tip span { margin-right: 7px; color: var(--color-purple); font-weight: 600; }
 .add-form { display: grid; grid-template-columns: minmax(300px, 1fr) auto auto; align-items: end; gap: 10px; margin-top: 14px; padding: 12px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 8px; }
 .stock-fields { display: grid; grid-template-columns: 1fr .7fr .9fr 1.5fr; gap: 7px; }
 .stock-fields input { width: 100%; padding: 7px 9px; }

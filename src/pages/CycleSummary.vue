@@ -130,7 +130,7 @@
             <div class="anchor-item-list">
               <div v-for="item in record.items" :key="item.id">
                 <span class="anchor-stock"><b>{{ item.name }}</b><small>{{ item.code || '—' }} · {{ item.theme || '未填题材' }}</small></span>
-                <span>{{ anchorLevelLabel(item.openingLevel) }}</span>
+                <span>{{ item.openingLevel ? anchorLevelLabel(item.openingLevel) : '待判断' }}</span>
                 <i>→</i>
                 <span>{{ item.closingLevel ? anchorLevelLabel(item.closingLevel) : '待复核' }}</span>
                 <em v-if="item.closingLevel" :class="item.closingLevel === item.openingLevel ? 'correct' : 'wrong'">
@@ -491,18 +491,19 @@ function getSnapshotAnchorStats(record: EmotionAnchorDaily) {
   const below = record.items.filter(item => item.openingLevel === 'below').length
   const settings = anchorSnapshotSettings.value
   const totalScore = above * settings.aboveScore + match * settings.matchScore + below * settings.belowScore
-  const score = record.items.length ? Math.round(totalScore / record.items.length) : settings.matchScore
+  const judged = above + match + below
+  const score = judged ? Math.round(totalScore / judged) : settings.matchScore
   const label = score >= settings.strongRepairMin ? '强修复'
     : score >= settings.weakRepairMin ? '弱修复'
       : score >= settings.weakDivergeMin ? '弱分歧' : '强分歧'
-  const reviewed = record.items.filter(item => item.closingLevel !== undefined)
+  const reviewed = record.items.filter(item => item.openingLevel !== undefined && item.closingLevel !== undefined)
   const correct = reviewed.filter(item => item.closingLevel === item.openingLevel).length
   return { above, match, below, score, label, reviewed: reviewed.length, correct, accuracy: reviewed.length ? correct / reviewed.length * 100 : 0 }
 }
 
 const cycleAnchorSummary = computed(() => {
   const items = cycleAnchorRecords.value.flatMap(record => record.items)
-  const reviewed = items.filter(item => item.closingLevel !== undefined)
+  const reviewed = items.filter(item => item.openingLevel !== undefined && item.closingLevel !== undefined)
   const correct = reviewed.filter(item => item.closingLevel === item.openingLevel).length
   return {
     anchors: items.length,

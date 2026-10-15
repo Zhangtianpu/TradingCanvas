@@ -84,10 +84,15 @@
                 />
                 <button class="range-btn" @click="applyCustomRange">确定</button>
               </div>
+              <router-link to="/line-chart-manage" class="chart-manage-link">管理折线图与均线</router-link>
+            </div>
+
+            <div v-if="chartConfigs.length === 0" class="charts-empty">
+              当前没有启用的折线图，<router-link to="/line-chart-manage">前往折线图管理</router-link>添加。
             </div>
 
             <!-- 分组图表 -->
-            <div class="chart-groups">
+            <div v-else class="chart-groups">
               <div v-for="group in chartGroups" :key="group.name" class="chart-group">
                 <div class="group-header">
                   <span class="group-name">{{ group.name }}</span>
@@ -101,24 +106,45 @@
                     @click="toggleExpand(chart.key)"
                   >
                     <div class="chart-title">
-                      {{ chart.title }}
-                      <span class="expand-icon">{{ expandedChartKey === chart.key ? '⊖' : '⊕' }}</span>
+                      <span>{{ chart.title }}</span>
+                      <span class="chart-title-actions">
+                        <span
+                          v-for="average in chartStore.preferences[chart.key].averages"
+                          :key="average.id"
+                          class="average-badge"
+                          :style="{ color: average.color }"
+                        >{{ average.type === 'cumulative' ? '累计' : `MA${average.period}` }}</span>
+                        <span class="expand-icon">{{ expandedChartKey === chart.key ? '⊖' : '⊕' }}</span>
+                      </span>
                     </div>
+                    <div v-if="expandedChartKey === chart.key" class="scroll-hint">← 左右滑动查看全部历史数据 →</div>
                     <div
-                      v-if="expandedChartKey === chart.key"
-                      class="expanded-range-controls"
-                      @click.stop
+                      :ref="el => setChartScrollRef(chart.key, el)"
+                      class="chart-scroll"
+                      :class="{ expanded: expandedChartKey === chart.key }"
+                      @click.stop="handleChartAreaClick(chart.key)"
                     >
-                      <button
-                        v-for="range in expandedRanges"
-                        :key="String(range.value)"
-                        class="expanded-range-btn"
-                        :class="{ active: expandedRange === range.value }"
-                        @click="expandedRange = range.value"
-                      >{{ range.label }}</button>
-                    </div>
-                    <div class="chart-container" :class="{ expanded: expandedChartKey === chart.key }">
-                      <canvas :ref="el => setChartRef(chart.key, el)"></canvas>
+                      <div
+                        class="chart-container"
+                        :class="{ expanded: expandedChartKey === chart.key }"
+                        :style="expandedChartKey === chart.key ? { width: expandedChartWidth } : undefined"
+                        @pointermove="showPointTooltip(chart.key, $event)"
+                        @pointerleave="hidePointTooltip(chart.key)"
+                      >
+                        <canvas :ref="el => setChartRef(chart.key, el)"></canvas>
+                        <div
+                          v-if="chartPointTooltips[chart.key]"
+                          class="chart-point-tooltip"
+                          :class="{ below: chartPointTooltips[chart.key].below }"
+                          :style="{
+                            left: `${chartPointTooltips[chart.key].x}px`,
+                            top: `${chartPointTooltips[chart.key].y}px`
+                          }"
+                        >
+                          <span>{{ chartPointTooltips[chart.key].date }}</span>
+                          <strong>{{ chartPointTooltips[chart.key].value }}</strong>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -152,7 +178,10 @@ import { useThemeStore } from '@/stores/theme'
 import { useStockStore } from '@/stores/stock'
 import { useEmotionStore } from '@/stores/emotion'
 import { useReviewStore } from '@/stores/review'
+import { useLineChartStore } from '@/stores/lineChart'
+import type { LineChartDefinition, LineChartKey, MovingAverageConfig } from '@/stores/lineChart'
 import type { EmotionDaily } from '@/types'
+import { buildContinuousBoardPromotionRates } from '@/composables/useEmotionMetrics'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -189,6 +218,7 @@ const themeStore = useThemeStore()
 const stockStore = useStockStore()
 const emotionStore = useEmotionStore()
 const reviewStore = useReviewStore()
+const chartStore = useLineChartStore()
 
 // ===== 模块拖拽排序 =====
 interface DashboardModule {
@@ -283,26 +313,13 @@ function resetLayout() {
 loadModuleOrder()
 
 // 图表配置
-const chartConfigs = [
-  { key: 'sh', title: '上证指数', color: '#f85149', fill: false },
-  { key: 'sz', title: '深证指数', color: '#58a6ff', fill: false },
-  { key: 'cyb', title: '创业板指数', color: '#3fb950', fill: false },
-  { key: 'allA', title: '全A指数', color: '#a371f7', fill: false },
-  { key: 'up', title: '上涨家数', color: '#f85149', fill: true },
-  { key: 'limitUp', title: '涨停家数', color: '#f0c040', fill: true },
-  { key: 'limitDown', title: '跌停家数', color: '#3fb950', fill: true },
-  { key: 'continuousBoard', title: '连板家数', color: '#f0c040', fill: true },
-  { key: 'sealRate', title: '封板率', color: '#58a6ff', fill: true },
-  { key: 'height', title: '空间板高度', color: '#f0c040', fill: true, special: true },
-  { key: 'targetStocks', title: '目标标的', color: '#a371f7', fill: true, special: 'review' }
-]
+const chartConfigs = computed(() => chartStore.enabledDefinitions)
 
 // 图表分组
-const chartGroups = computed(() => [
-  { name: '宏观指数', charts: chartConfigs.filter(c => ['sh', 'sz', 'cyb', 'allA'].includes(c.key)) },
-  { name: '涨跌概况', charts: chartConfigs.filter(c => ['up', 'limitUp', 'limitDown'].includes(c.key)) },
-  { name: '连板情绪', charts: chartConfigs.filter(c => ['continuousBoard', 'sealRate', 'height', 'targetStocks'].includes(c.key)) }
-])
+const chartGroups = computed(() => ['宏观指数', '涨跌概况', '连板情绪'].map(name => ({
+  name,
+  charts: chartConfigs.value.filter(chart => chart.group === name)
+})).filter(group => group.charts.length > 0))
 
 // 时间范围选项
 const timeRanges = [
@@ -313,12 +330,6 @@ const timeRanges = [
 ]
 const selectedRange = ref(20)
 const customRange = ref<number | null>(null)
-const expandedRange = ref<number | 'all'>(30)
-const expandedRanges = [
-  { label: '30天', value: 30 as const },
-  { label: '60天', value: 60 as const },
-  { label: '全部', value: 'all' as const }
-]
 
 function applyCustomRange() {
   if (customRange.value && customRange.value >= 1 && customRange.value <= 365) {
@@ -329,10 +340,16 @@ function applyCustomRange() {
 
 // 图表refs存储
 const chartRefs = ref<Record<string, HTMLCanvasElement | null>>({})
+const chartScrollRefs = ref<Record<string, HTMLElement | null>>({})
 const chartInstances = ref<Record<string, any>>({})
+const chartPointTooltips = ref<Record<string, { x: number; y: number; date: string; value: string; below: boolean }>>({})
 
 function setChartRef(key: string, el: any) {
   if (el) chartRefs.value[key] = el
+}
+
+function setChartScrollRef(key: string, el: any) {
+  if (el) chartScrollRefs.value[key] = el
 }
 
 // 展开的图表
@@ -346,10 +363,10 @@ const recentEmotions = computed(() => {
 
 function getEmotionsForChart(key: string) {
   const all = [...emotionStore.sortedEmotions].reverse()
-  const range = expandedChartKey.value === key ? expandedRange.value : selectedRange.value
-  if (range === 'all') return all
-  return all.slice(-range)
+  return expandedChartKey.value === key ? all : all.slice(-selectedRange.value)
 }
+
+const expandedChartWidth = computed(() => `${Math.max(900, allSortedEmotions.value.length * 52)}px`)
 
 // 读取stairChart1的标签覆盖数据（空间板高度折线图以第一个天梯图为准）
 function getChart1TagOverrides(): Record<string, Record<string, any>> {
@@ -389,10 +406,16 @@ const allSortedEmotions = computed(() => {
 const chartOptions = {
   responsive: true,
   maintainAspectRatio: false,
-  interaction: { intersect: false, mode: 'index' as const },
+  interaction: { intersect: false, mode: 'nearest' as const, axis: 'x' as const },
+  hover: { intersect: false, mode: 'nearest' as const },
+  events: ['mousemove', 'mouseout', 'click', 'touchstart', 'touchmove'] as Array<'mousemove' | 'mouseout' | 'click' | 'touchstart' | 'touchmove'>,
   plugins: {
     legend: { display: false },
     tooltip: {
+      enabled: false,
+      position: 'nearest' as const,
+      mode: 'nearest' as const,
+      intersect: false,
       backgroundColor: 'rgba(22,27,34,0.95)',
       titleColor: '#f0f6fc',
       bodyColor: '#c9d1d9',
@@ -448,8 +471,11 @@ function createGradient(ctx: CanvasRenderingContext2D, color: string, height: nu
 }
 
 // 获取图表数据
-function getChartData(key: string): number[] {
-  const emotions = getEmotionsForChart(key)
+function getChartDataForEmotions(key: LineChartKey, emotions: EmotionDaily[]): number[] {
+  if (key === 'promotionRate') {
+    const rates = buildContinuousBoardPromotionRates(emotionStore.emotions)
+    return emotions.map(e => rates[e.date] || 0)
+  }
   const dataMap: Record<string, (e: any) => number> = {
     sh: e => e.shIndex || 0,
     sz: e => e.szIndex || 0,
@@ -466,9 +492,51 @@ function getChartData(key: string): number[] {
   return emotions.map(dataMap[key] || (e => 0))
 }
 
+function getChartData(key: LineChartKey): number[] {
+  return getChartDataForEmotions(key, getEmotionsForChart(key))
+}
+
+function calculateMovingAverage(values: number[], average: MovingAverageConfig): Array<number | null> {
+  let runningTotal = 0
+  return values.map((value, index) => {
+    runningTotal += value
+    if (average.type === 'cumulative') return Number((runningTotal / (index + 1)).toFixed(4))
+
+    const period = average.period || 2
+    if (index < period - 1) return null
+    let total = 0
+    for (let cursor = index - period + 1; cursor <= index; cursor += 1) total += values[cursor]
+    return Number((total / period).toFixed(4))
+  })
+}
+
+function getAverageData(key: LineChartKey, emotions: EmotionDaily[], average: MovingAverageConfig) {
+  const allEmotions = allSortedEmotions.value
+  const allValues = getChartDataForEmotions(key, allEmotions)
+  const allAverages = calculateMovingAverage(allValues, average)
+  const valuesByDate = new Map(allEmotions.map((emotion, index) => [emotion.date, allAverages[index]]))
+  return emotions.map(emotion => valuesByDate.get(emotion.date) ?? null)
+}
+
+function createAverageDatasets(config: LineChartDefinition, emotions: EmotionDaily[]) {
+  return chartStore.preferences[config.key].averages.map(average => ({
+    label: average.type === 'cumulative' ? '开始至今均线' : `${average.period}日均线`,
+    data: getAverageData(config.key, emotions, average),
+    borderColor: average.color,
+    backgroundColor: 'transparent',
+    borderWidth: 1.8,
+    borderDash: average.type === 'cumulative' ? [6, 4] : [],
+    fill: false,
+    tension: 0.35,
+    pointRadius: 0,
+    pointHoverRadius: 0,
+    spanGaps: true
+  }))
+}
+
 function formatChartValue(key: string, value: number): string {
   if (['sh', 'sz', 'cyb', 'allA'].includes(key)) return value.toFixed(2) + ' 点'
-  if (key === 'sealRate') return value.toFixed(2) + '%'
+  if (key === 'sealRate' || key === 'promotionRate') return value.toFixed(2) + '%'
   if (key === 'height') return value.toFixed(0) + ' 板'
   if (key === 'targetStocks') return value.toFixed(0) + ' 个'
   return value.toLocaleString() + ' 家'
@@ -483,8 +551,54 @@ function chartTooltipLabel(config: any, context: any): string {
   return `${config.title}：${formatChartValue(config.key, Number(context.parsed.y) || 0)}`
 }
 
+function showPointTooltip(key: LineChartKey, event: PointerEvent) {
+  const chart = chartInstances.value[key]
+  const canvas = chartRefs.value[key]
+  if (!chart || !canvas) return
+
+  const points = chart.getDatasetMeta(0)?.data || []
+  if (points.length === 0) return
+
+  const rect = canvas.getBoundingClientRect()
+  const pointerX = event.clientX - rect.left
+  let nearestIndex = 0
+  let nearestDistance = Number.POSITIVE_INFINITY
+
+  points.forEach((point: any, index: number) => {
+    const distance = Math.abs(point.x - pointerX)
+    if (distance < nearestDistance) {
+      nearestDistance = distance
+      nearestIndex = index
+    }
+  })
+
+  const point = points[nearestIndex]
+  const emotions = getEmotionsForChart(key)
+  const values = getChartData(key)
+  const emotion = emotions[nearestIndex]
+  if (!point || !emotion) return
+
+  chartPointTooltips.value = {
+    ...chartPointTooltips.value,
+    [key]: {
+      x: Math.min(Math.max(point.x, 52), rect.width - 52),
+      y: point.y,
+      date: emotion.date,
+      value: formatChartValue(key, values[nearestIndex] || 0),
+      below: point.y < 55
+    }
+  }
+}
+
+function hidePointTooltip(key: LineChartKey) {
+  if (!chartPointTooltips.value[key]) return
+  const next = { ...chartPointTooltips.value }
+  delete next[key]
+  chartPointTooltips.value = next
+}
+
 // 创建单线图表
-function createChart(canvas: HTMLCanvasElement, config: any) {
+function createChart(canvas: HTMLCanvasElement, config: LineChartDefinition) {
   const ctx = canvas.getContext('2d')
   if (!ctx) return null
 
@@ -520,8 +634,9 @@ function createChart(canvas: HTMLCanvasElement, config: any) {
           }),
           pointBorderColor: 'rgba(22,27,34,0.8)',
           pointBorderWidth: 1.5,
-          pointHoverRadius: 7
-        }]
+          pointHoverRadius: 7,
+          pointHitRadius: 18
+        }, ...createAverageDatasets(config, emotions)]
       },
       options: {
         ...chartOptions,
@@ -572,10 +687,11 @@ function createChart(canvas: HTMLCanvasElement, config: any) {
         pointBorderColor: 'rgba(22,27,34,0.8)',
         pointBorderWidth: 1.5,
         pointHoverRadius: 6,
+        pointHitRadius: 18,
         pointHoverBackgroundColor: config.color,
         pointHoverBorderColor: '#fff',
         pointHoverBorderWidth: 2
-      }]
+      }, ...createAverageDatasets(config, emotions)]
     },
     options: {
       ...chartOptions,
@@ -606,7 +722,7 @@ function destroyAllCharts() {
 // 渲染所有图表
 function renderAllCharts() {
   destroyAllCharts()
-  chartConfigs.forEach(config => {
+  chartConfigs.value.forEach(config => {
     const canvas = chartRefs.value[config.key]
     if (canvas) {
       chartInstances.value[config.key] = createChart(canvas, config)
@@ -614,30 +730,38 @@ function renderAllCharts() {
   })
 }
 
-// 切换展开状态：保留现有 Chart 实例，等待布局稳定后调整尺寸。
-// 重建实例会丢失部分交互状态，因此这里只 resize + update。
 async function toggleExpand(key: string) {
+  chartPointTooltips.value = {}
   expandedChartKey.value = expandedChartKey.value === key ? null : key
   await nextTick()
-  requestAnimationFrame(() => {
+  renderAllCharts()
+  await nextTick()
+  if (expandedChartKey.value === key) {
     requestAnimationFrame(() => {
-      Object.keys(chartInstances.value).forEach(k => {
-        const chart = chartInstances.value[k]
-        if (chart) {
-          chart.resize()
-          chart.update('none')
-        }
-      })
+      const scroller = chartScrollRefs.value[key]
+      if (scroller) scroller.scrollLeft = scroller.scrollWidth
     })
-  })
+  }
 }
 
-// 时间范围变化时重新渲染（展开状态由 toggleExpand 处理）
-watch([selectedRange, expandedRange], async () => {
+function handleChartAreaClick(key: string) {
+  toggleExpand(key)
+}
+
+// 普通视图时间范围变化时重新渲染
+watch(selectedRange, async () => {
   destroyAllCharts()
   await nextTick()
   renderAllCharts()
 })
+
+watch(() => chartStore.preferences, async () => {
+  if (expandedChartKey.value && !chartStore.preferences[expandedChartKey.value as LineChartKey]?.enabled) {
+    expandedChartKey.value = null
+  }
+  await nextTick()
+  renderAllCharts()
+}, { deep: true })
 
 // 监听天梯图标签更新（以第一个天梯图为准）
 function onStairChartTagsUpdated(e: Event) {
@@ -927,6 +1051,24 @@ watch(() => emotionStore.sortedEmotions.length, async () => {
   padding: 8px 0;
 }
 
+.chart-manage-link {
+  margin-left: auto;
+  padding: 5px 9px;
+  background: rgba(88,166,255,.1);
+  border: 1px solid rgba(88,166,255,.25);
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.charts-empty {
+  padding: 28px 16px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border: 1px dashed var(--border-color);
+  border-radius: 8px;
+  text-align: center;
+}
+
 .control-label {
   font-size: 12px;
   color: var(--text-secondary);
@@ -1043,35 +1185,6 @@ watch(() => emotionStore.sortedEmotions.length, async () => {
   border-color: var(--color-blue);
 }
 
-.expanded-range-controls {
-  display: flex;
-  justify-content: flex-end;
-  gap: 5px;
-  margin-bottom: 8px;
-}
-
-.expanded-range-btn {
-  padding: 3px 10px;
-  font-size: 11px;
-  border-radius: 4px;
-  border: 1px solid var(--border-color);
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.expanded-range-btn:hover {
-  border-color: var(--color-blue);
-  color: var(--color-blue);
-}
-
-.expanded-range-btn.active {
-  background: rgba(88,166,255,0.16);
-  border-color: var(--color-blue);
-  color: var(--color-blue);
-}
-
 .chart-title {
   font-size: 12px;
   font-weight: 500;
@@ -1082,6 +1195,18 @@ watch(() => emotionStore.sortedEmotions.length, async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.chart-title-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.average-badge {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .2px;
 }
 
 .expand-icon {
@@ -1103,11 +1228,83 @@ watch(() => emotionStore.sortedEmotions.length, async () => {
 .chart-container {
   height: 140px;
   width: 100%;
+  position: relative;
 }
 
 .chart-container.expanded {
   height: 280px;
 }
+
+.chart-scroll { width: 100%; overflow: hidden; }
+.chart-scroll canvas { cursor: crosshair; }
+
+.chart-point-tooltip {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 86px;
+  padding: 6px 9px;
+  color: #c9d1d9;
+  background: rgba(22, 27, 34, 0.96);
+  border: 1px solid rgba(88, 166, 255, 0.5);
+  border-radius: 7px;
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.32);
+  font-size: 11px;
+  line-height: 1.3;
+  text-align: center;
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 9px));
+  white-space: nowrap;
+}
+
+.chart-point-tooltip::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 8px;
+  height: 8px;
+  background: rgba(22, 27, 34, 0.96);
+  border-right: 1px solid rgba(88, 166, 255, 0.5);
+  border-bottom: 1px solid rgba(88, 166, 255, 0.5);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.chart-point-tooltip.below {
+  transform: translate(-50%, 9px);
+}
+
+.chart-point-tooltip.below::after {
+  top: -5px;
+  bottom: auto;
+  border: 0;
+  border-top: 1px solid rgba(88, 166, 255, 0.5);
+  border-left: 1px solid rgba(88, 166, 255, 0.5);
+}
+
+.chart-point-tooltip strong {
+  color: var(--color-blue);
+  font-size: 12px;
+}
+
+.chart-scroll.expanded {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 7px;
+  cursor: grab;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(88,166,255,.55) var(--bg-tertiary);
+}
+
+.chart-scroll.expanded:active { cursor: grabbing; }
+
+.chart-scroll.expanded::-webkit-scrollbar { height: 8px; }
+.chart-scroll.expanded::-webkit-scrollbar-track { background: var(--bg-tertiary); border-radius: 4px; }
+.chart-scroll.expanded::-webkit-scrollbar-thumb { background: rgba(88,166,255,.55); border-radius: 4px; }
+
+.scroll-hint { margin: -2px 0 7px; color: var(--text-tertiary); font-size: 10px; text-align: right; }
 
 /* 题材列表 */
 .theme-list {

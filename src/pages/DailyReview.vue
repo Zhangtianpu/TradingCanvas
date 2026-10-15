@@ -78,6 +78,11 @@
               <span class="input-label">连板家数</span>
               <input v-model.number="macroForm.continuousBoardCount" type="number" min="0" class="small-input" />
             </div>
+            <div class="input-row calculated-row">
+              <span class="input-label">晋级率</span>
+              <span class="calculated-value">{{ continuousBoardPromotionRate.toFixed(2) }}%</span>
+              <span class="calculated-detail">{{ macroForm.continuousBoardCount }}/{{ previousLimitUpCount }}</span>
+            </div>
             <div class="input-row">
               <span class="input-label">封板率</span>
               <input v-model.number="macroForm.sealRate" type="number" min="0" max="100" step="0.01" class="small-input" />
@@ -259,6 +264,14 @@ const macroForm = reactive({
 
 const emotion = computed(() => emotionStore.getEmotionByDate(selectedDate.value))
 const existingReview = computed(() => reviewStore.getReviewByDate(selectedDate.value))
+
+const previousEmotion = computed(() => [...emotionStore.emotions]
+  .filter(item => item.date < selectedDate.value)
+  .sort((a, b) => b.date.localeCompare(a.date))[0])
+const previousLimitUpCount = computed(() => previousEmotion.value?.limitUpCount || 0)
+const continuousBoardPromotionRate = computed(() => previousLimitUpCount.value > 0
+  ? macroForm.continuousBoardCount / previousLimitUpCount.value * 100
+  : 0)
 
 const weekDay = computed(() => {
   const days = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
@@ -597,6 +610,10 @@ watch(selectedDate, () => {
   color: var(--text-secondary);
   font-size: 11px;
 }
+
+.calculated-row { padding: 5px 6px; background: rgba(188,140,255,.08); border: 1px solid rgba(188,140,255,.18); border-radius: 4px; }
+.calculated-value { flex: 1; color: var(--color-purple); font-size: 13px; font-weight: 600; }
+.calculated-detail { color: var(--text-tertiary); font-size: 10px; }
 
 /* 当日题材 */
 .themes-section {

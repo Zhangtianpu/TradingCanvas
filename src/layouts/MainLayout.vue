@@ -13,6 +13,7 @@
         <router-link to="/positions" class="nav-item" @click="sidebarOpen = false">持仓</router-link>
         <router-link to="/cycle-summary" class="nav-item" @click="sidebarOpen = false">周期总结</router-link>
         <router-link to="/emotion-anchor" class="nav-item" @click="sidebarOpen = false">情绪锚定</router-link>
+        <router-link to="/line-chart-manage" class="nav-item" @click="sidebarOpen = false">折线图管理</router-link>
         <router-link to="/pattern-mining" class="nav-item" @click="sidebarOpen = false">模式挖掘</router-link>
         <router-link to="/trade-modes" class="nav-item" @click="sidebarOpen = false">标签管理</router-link>
         <router-link to="/settings" class="nav-item" @click="sidebarOpen = false">设置</router-link>

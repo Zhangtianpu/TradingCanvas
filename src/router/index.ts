@@ -54,6 +54,11 @@ const router = createRouter({
       component: () => import('@/pages/EmotionAnchor.vue')
     },
     {
+      path: '/line-chart-manage',
+      name: 'line-chart-manage',
+      component: () => import('@/pages/LineChartManage.vue')
+    },
+    {
       path: '/cycle-summary',
       name: 'cycle-summary',
       component: () => import('@/pages/CycleSummary.vue')

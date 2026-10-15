@@ -97,7 +97,7 @@ export interface EmotionAnchorItem {
   name: string
   code?: string
   theme?: string
-  openingLevel: EmotionAnchorLevel
+  openingLevel?: EmotionAnchorLevel
   closingLevel?: EmotionAnchorLevel
   note: string
   createdAt: string
@@ -109,6 +109,8 @@ export interface EmotionAnchorDaily {
   date: string
   items: EmotionAnchorItem[]
   closingNote: string
+  inheritedFromDate?: string
+  inheritanceResolvedAt?: string
   finalizedAt?: string
   createdAt: string
   updatedAt: string
