@@ -131,7 +131,10 @@
                         @pointermove="showPointTooltip(chart.key, $event)"
                         @pointerleave="hidePointTooltip(chart.key)"
                       >
-                        <canvas :ref="el => setChartRef(chart.key, el)"></canvas>
+                        <canvas
+                          :key="`${chart.key}-${expandedChartKey === chart.key ? 'expanded' : 'compact'}`"
+                          :data-dashboard-chart="chart.key"
+                        ></canvas>
                         <div
                           v-if="chartPointTooltips[chart.key]"
                           class="chart-point-tooltip"
@@ -339,17 +342,17 @@ function applyCustomRange() {
 }
 
 // 图表refs存储
-const chartRefs = ref<Record<string, HTMLCanvasElement | null>>({})
 const chartScrollRefs = ref<Record<string, HTMLElement | null>>({})
 const chartInstances = ref<Record<string, any>>({})
 const chartPointTooltips = ref<Record<string, { x: number; y: number; date: string; value: string; below: boolean }>>({})
-
-function setChartRef(key: string, el: any) {
-  if (el) chartRefs.value[key] = el
-}
+let chartRenderVersion = 0
 
 function setChartScrollRef(key: string, el: any) {
   if (el) chartScrollRefs.value[key] = el
+}
+
+function getVisibleChartCanvas(key: string) {
+  return document.querySelector<HTMLCanvasElement>(`canvas[data-dashboard-chart="${key}"]`)
 }
 
 // 展开的图表
@@ -553,7 +556,7 @@ function chartTooltipLabel(config: any, context: any): string {
 
 function showPointTooltip(key: LineChartKey, event: PointerEvent) {
   const chart = chartInstances.value[key]
-  const canvas = chartRefs.value[key]
+  const canvas = chart?.canvas as HTMLCanvasElement | undefined
   if (!chart || !canvas) return
 
   const points = chart.getDatasetMeta(0)?.data || []
@@ -714,8 +717,8 @@ function destroyAllCharts() {
   Object.keys(chartInstances.value).forEach(key => {
     if (chartInstances.value[key]) {
       chartInstances.value[key].destroy()
-      chartInstances.value[key] = null
     }
+    delete chartInstances.value[key]
   })
 }
 
@@ -723,24 +726,33 @@ function destroyAllCharts() {
 function renderAllCharts() {
   destroyAllCharts()
   chartConfigs.value.forEach(config => {
-    const canvas = chartRefs.value[config.key]
-    if (canvas) {
+    const canvas = getVisibleChartCanvas(config.key)
+    if (canvas?.isConnected) {
       chartInstances.value[config.key] = createChart(canvas, config)
     }
   })
 }
 
+function waitForChartLayout() {
+  return new Promise<void>(resolve => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+  })
+}
+
 async function toggleExpand(key: string) {
+  const renderVersion = ++chartRenderVersion
   chartPointTooltips.value = {}
   expandedChartKey.value = expandedChartKey.value === key ? null : key
   await nextTick()
+  await waitForChartLayout()
+  if (renderVersion !== chartRenderVersion) return
   renderAllCharts()
-  await nextTick()
+  await waitForChartLayout()
+  if (renderVersion !== chartRenderVersion) return
   if (expandedChartKey.value === key) {
-    requestAnimationFrame(() => {
-      const scroller = chartScrollRefs.value[key]
-      if (scroller) scroller.scrollLeft = scroller.scrollWidth
-    })
+    chartInstances.value[key]?.resize()
+    const scroller = chartScrollRefs.value[key]
+    if (scroller) scroller.scrollLeft = scroller.scrollWidth
   }
 }
 
@@ -780,6 +792,8 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('stairChartTagsUpdated', onStairChartTagsUpdated)
+  chartRenderVersion += 1
+  destroyAllCharts()
 })
 
 watch(() => emotionStore.sortedEmotions.length, async () => {
