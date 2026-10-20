@@ -10,7 +10,8 @@
     </header>
 
     <section class="summary-strip">
-      <div><span>抱团标的</span><strong>{{ store.targets.length }}</strong><small>个</small></div>
+      <div><span>看板标的</span><strong>{{ store.activeTargets.length }}</strong><small>个</small></div>
+      <div><span>历史标的</span><strong>{{ store.archivedTargets.length }}</strong><small>个</small></div>
       <div><span>累计记录</span><strong>{{ store.totalEntries }}</strong><small>条</small></div>
       <div><span>记录天数</span><strong>{{ store.recordDates.length }}</strong><small>天</small></div>
       <div :class="todayAverageClass"><span>当日平均涨跌</span><strong>{{ todayAverageText }}</strong></div>
@@ -46,8 +47,8 @@
         </div>
       </div>
 
-      <div v-if="store.targets.length" class="record-list">
-        <article v-for="(target, targetIndex) in store.targets" :key="target.id" class="record-card">
+      <div v-if="store.activeTargets.length" class="record-list">
+        <article v-for="(target, targetIndex) in store.activeTargets" :key="target.id" class="record-card">
           <div class="target-info">
             <div class="target-title">
               <strong>{{ target.name }}</strong>
@@ -66,10 +67,11 @@
                 <button
                   type="button"
                   title="下移"
-                  :disabled="targetIndex === store.targets.length - 1"
+                  :disabled="targetIndex === store.activeTargets.length - 1"
                   @click="moveTarget(target, 'down')"
                 >↓ 下移</button>
               </div>
+              <button type="button" class="archive-text" @click="archiveTarget(target)">保存到历史</button>
               <button type="button" @click="openTargetEdit(target)">编辑标的</button>
               <button type="button" class="danger-text" @click="deleteTarget(target)">删除</button>
             </div>
@@ -99,6 +101,32 @@
         <b>还没有抱团标的</b>
         <span>先在上方添加市场最具辨识度、最能代表抱团情绪的核心标的。</span>
       </div>
+    </section>
+
+    <section class="panel archived-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>历史标的</h2>
+          <p>从看板保存到历史的标的会保留全部每日记录，可随时恢复。</p>
+        </div>
+        <span class="history-count">{{ store.archivedTargets.length }} 个</span>
+      </div>
+      <div v-if="store.archivedTargets.length" class="archived-list">
+        <article v-for="target in store.archivedTargets" :key="target.id" class="archived-card">
+          <div>
+            <strong>{{ target.name }}</strong>
+            <span v-if="target.code">{{ target.code }}</span>
+            <i v-if="target.theme">{{ target.theme }}</i>
+          </div>
+          <p>{{ target.note || '暂无标的备注' }}</p>
+          <small>保存时间：{{ formatDateTime(target.archivedAt) }} · {{ Object.keys(target.entries).length }} 条每日记录</small>
+          <div class="archived-actions">
+            <button class="restore-button" @click="restoreTarget(target)">恢复到看板</button>
+            <button class="permanent-delete" @click="deleteTarget(target)">永久删除</button>
+          </div>
+        </article>
+      </div>
+      <div v-else class="history-empty">暂无历史标的</div>
     </section>
 
     <section class="panel history-panel">
@@ -164,9 +192,9 @@ const editingTarget = ref<EmotionClusterTarget | null>(null)
 const editTargetForm = reactive({ name: '', code: '', theme: '', note: '' })
 
 function rebuildDrafts() {
-  const validIds = new Set(store.targets.map(target => target.id))
+  const validIds = new Set(store.activeTargets.map(target => target.id))
   Object.keys(entryDrafts).forEach(id => { if (!validIds.has(id)) delete entryDrafts[id] })
-  store.targets.forEach(target => {
+  store.activeTargets.forEach(target => {
     const entry = target.entries[selectedDate.value]
     entryDrafts[target.id] = {
       trend: entry?.trend || '',
@@ -183,8 +211,9 @@ function addTarget() {
     toast.error('请输入抱团标的名称')
     return
   }
-  if (store.targets.some(target => target.name === targetForm.name.trim())) {
-    toast.error('该抱团标的已经存在')
+  const existing = store.targets.find(target => target.name === targetForm.name.trim())
+  if (existing) {
+    toast.error(existing.archivedAt ? '该标的已在历史中，请直接恢复到看板' : '该抱团标的已经存在')
     return
   }
   const target = store.addTarget({ ...targetForm })
@@ -228,6 +257,16 @@ function moveTarget(target: EmotionClusterTarget, direction: 'up' | 'down') {
   toast.success(`${target.name} 已${direction === 'up' ? '上移' : '下移'}`)
 }
 
+function archiveTarget(target: EmotionClusterTarget) {
+  if (!store.archiveTarget(target.id)) return
+  toast.success(`${target.name} 已保存到历史`)
+}
+
+function restoreTarget(target: EmotionClusterTarget) {
+  if (!store.restoreTarget(target.id)) return
+  toast.success(`${target.name} 已恢复到看板`)
+}
+
 function openTargetEdit(target: EmotionClusterTarget) {
   editingTarget.value = target
   Object.assign(editTargetForm, {
@@ -259,7 +298,7 @@ function shiftDate(offset: number) {
   selectedDate.value = date.toISOString().slice(0, 10)
 }
 
-const selectedChanges = computed(() => store.targets
+const selectedChanges = computed(() => store.activeTargets
   .map(target => target.entries[selectedDate.value]?.changePercent)
   .filter((value): value is number => typeof value === 'number'))
 const todayAverage = computed(() => selectedChanges.value.length
@@ -284,6 +323,11 @@ function formatPercent(value: number | null) {
 function changeClass(value: number | null) {
   return { gain: value !== null && value > 0, loss: value !== null && value < 0, flat: value === 0 }
 }
+
+function formatDateTime(value?: string) {
+  if (!value) return '—'
+  return new Date(value).toLocaleString('zh-CN', { hour12: false })
+}
 </script>
 
 <style scoped>
@@ -293,7 +337,7 @@ function changeClass(value: number | null) {
 .page-heading h1 { font-size: 22px; }
 .page-heading p { margin-top: 5px; color: var(--text-secondary); font-size: 12px; }
 .dashboard-link { padding: 7px 11px; border: 1px solid var(--border-color); border-radius: 5px; font-size: 11px; }
-.summary-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+.summary-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 12px; }
 .summary-strip > div { padding: 11px 13px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; }
 .summary-strip span { display: block; margin-bottom: 5px; color: var(--text-tertiary); font-size: 10px; }
 .summary-strip strong { font-size: 20px; }
@@ -325,6 +369,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-blue); }
 .target-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin-top: 7px; }
 .target-actions button { padding: 0; color: var(--color-blue); background: none; font-size: 9px; }
 .target-actions .danger-text { color: var(--color-red); }
+.target-actions .archive-text { color: var(--color-gold); }
 .move-actions { display: inline-flex; gap: 3px; padding-right: 7px; border-right: 1px solid var(--border-color); }
 .target-actions .move-actions button { padding: 2px 5px; color: var(--text-secondary); background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 3px; }
 .target-actions .move-actions button:not(:disabled):hover { color: var(--color-blue); border-color: var(--color-blue); }
@@ -336,6 +381,18 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-blue); }
 .empty-state { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 34px; color: var(--text-tertiary); border: 1px dashed var(--border-color); border-radius: 7px; font-size: 11px; }
 .empty-state b { color: var(--text-secondary); font-size: 13px; }
 .history-count { color: var(--text-tertiary); font-size: 10px; }
+.archived-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.archived-card { padding: 12px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 7px; }
+.archived-card > div:first-child { display: flex; align-items: baseline; gap: 7px; }
+.archived-card strong { font-size: 13px; }
+.archived-card span { color: var(--text-tertiary); font-size: 9px; }
+.archived-card i { margin-left: auto; padding: 2px 6px; color: var(--color-orange); background: rgba(240,136,62,.1); border-radius: 8px; font-size: 9px; font-style: normal; }
+.archived-card p { min-height: 28px; margin: 8px 0 5px; color: var(--text-secondary); font-size: 10px; line-height: 1.4; }
+.archived-card small { color: var(--text-tertiary); font-size: 8px; }
+.archived-actions { display: flex; gap: 6px; margin-top: 10px; }
+.archived-actions button { padding: 5px 8px; border-radius: 4px; font-size: 9px; }
+.restore-button { color: var(--color-blue); background: rgba(88,166,255,.1); border: 1px solid rgba(88,166,255,.25); }
+.permanent-delete { color: var(--color-red); background: rgba(248,81,73,.08); border: 1px solid rgba(248,81,73,.2); }
 .history-table-wrap { overflow-x: auto; }
 .history-table { width: 100%; border-collapse: collapse; font-size: 11px; }
 .history-table th, .history-table td { padding: 9px 10px; border-bottom: 1px solid var(--border-color); text-align: left; }
@@ -352,6 +409,6 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-blue); }
 .dialog-footer { display: flex; justify-content: flex-end; gap: 7px; padding: 11px 15px; border-top: 1px solid var(--border-color); }
 .dialog-footer button { padding: 7px 13px; border-radius: 4px; color: var(--text-secondary); background: var(--bg-tertiary); }
 .dialog-footer .primary-button { color: #fff; background: var(--color-blue); }
-@media (max-width: 1050px) { .target-form { grid-template-columns: repeat(2, 1fr); } .target-form button { justify-self: start; } .daily-fields { grid-template-columns: 1fr 150px; } .daily-note { grid-column: 1 / -1; } }
+@media (max-width: 1050px) { .target-form { grid-template-columns: repeat(2, 1fr); } .target-form button { justify-self: start; } .daily-fields { grid-template-columns: 1fr 150px; } .daily-note { grid-column: 1 / -1; } .archived-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 700px) { .page-heading, .record-heading { align-items: flex-start; flex-direction: column; } .summary-strip { grid-template-columns: repeat(2, 1fr); } .target-form { grid-template-columns: 1fr; } .record-card { grid-template-columns: 1fr; } .target-info { border-right: 0; border-bottom: 1px solid var(--border-color); } .daily-fields { grid-template-columns: 1fr; } .daily-note { grid-column: auto; } .daily-actions { justify-content: flex-end; } }
 </style>

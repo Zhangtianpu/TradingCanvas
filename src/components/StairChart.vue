@@ -253,6 +253,12 @@
               >↓</button>
               <button
                 type="button"
+                class="cluster-archive-button"
+                title="保存到历史"
+                @click="archiveClusterTarget(target)"
+              >存</button>
+              <button
+                type="button"
                 class="cluster-delete-button"
                 title="删除标的"
                 @click="removeClusterTarget(target)"
@@ -646,7 +652,7 @@ function updateHeightCalc(e: EmotionDaily, value: string) {
 loadHeightCalcOverrides()
 
 // ===== 抱团标的逐日记录（与“情绪抱团”模块共用数据） =====
-const clusterTargets = computed(() => clusterStore.targets)
+const clusterTargets = computed(() => clusterStore.activeTargets)
 const newClusterTargetName = ref('')
 const editingClusterCell = ref<{ targetId: string; targetName: string; date: string } | null>(null)
 const clusterChangeInputRef = ref<HTMLInputElement | null>(null)
@@ -673,6 +679,10 @@ function removeClusterTarget(target: EmotionClusterTarget) {
 
 function moveClusterTarget(target: EmotionClusterTarget, direction: 'up' | 'down') {
   clusterStore.moveTarget(target.id, direction)
+}
+
+function archiveClusterTarget(target: EmotionClusterTarget) {
+  clusterStore.archiveTarget(target.id)
 }
 
 function openClusterEntry(target: EmotionClusterTarget, date: string) {
@@ -1733,6 +1743,12 @@ function deleteEdit() {
   background: rgba(248, 81, 73, 0.16);
   border-color: rgba(248, 81, 73, .55);
   color: #f85149;
+}
+
+.cluster-target-controls .cluster-archive-button:not(:disabled):hover {
+  background: rgba(240, 192, 64, 0.15);
+  border-color: rgba(240, 192, 64, .6);
+  color: var(--color-gold);
 }
 
 .cluster-scroll {

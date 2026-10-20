@@ -107,15 +107,48 @@ export const useEmotionClusterStore = defineStore('emotionCluster', () => {
     persist()
   }
 
+  function archiveTarget(id: string) {
+    const target = targets.value.find(item => item.id === id)
+    if (!target || target.archivedAt) return false
+    const now = new Date().toISOString()
+    target.archivedAt = now
+    target.updatedAt = now
+    const remaining = targets.value.filter(item => item.id !== id)
+    targets.value = [
+      ...remaining.filter(item => !item.archivedAt),
+      ...remaining.filter(item => item.archivedAt),
+      target
+    ]
+    persist()
+    return true
+  }
+
+  function restoreTarget(id: string) {
+    const target = targets.value.find(item => item.id === id)
+    if (!target || !target.archivedAt) return false
+    target.archivedAt = undefined
+    target.updatedAt = new Date().toISOString()
+    const remaining = targets.value.filter(item => item.id !== id)
+    targets.value = [
+      ...remaining.filter(item => !item.archivedAt),
+      target,
+      ...remaining.filter(item => item.archivedAt)
+    ]
+    persist()
+    return true
+  }
+
   function moveTarget(id: string, direction: 'up' | 'down') {
-    const index = targets.value.findIndex(item => item.id === id)
+    const active = targets.value.filter(item => !item.archivedAt)
+    const archived = targets.value.filter(item => item.archivedAt)
+    const index = active.findIndex(item => item.id === id)
     if (index < 0) return false
     const targetIndex = direction === 'up' ? index - 1 : index + 1
-    if (targetIndex < 0 || targetIndex >= targets.value.length) return false
-    const reordered = [...targets.value]
+    if (targetIndex < 0 || targetIndex >= active.length) return false
+    const reordered = [...active]
     const [target] = reordered.splice(index, 1)
     reordered.splice(targetIndex, 0, target)
-    targets.value = reordered
+    targets.value = [...reordered, ...archived]
     persist()
     return true
   }
@@ -145,8 +178,26 @@ export const useEmotionClusterStore = defineStore('emotionCluster', () => {
 
   const totalEntries = computed(() => targets.value.reduce((sum, target) => sum + Object.keys(target.entries).length, 0))
   const recordDates = computed(() => [...new Set(targets.value.flatMap(target => Object.keys(target.entries)))].sort((a, b) => b.localeCompare(a)))
+  const activeTargets = computed(() => targets.value.filter(target => !target.archivedAt))
+  const archivedTargets = computed(() => targets.value
+    .filter(target => target.archivedAt)
+    .sort((a, b) => (b.archivedAt || '').localeCompare(a.archivedAt || '')))
 
   migrateLegacyStairData()
 
-  return { targets, totalEntries, recordDates, addTarget, updateTarget, deleteTarget, moveTarget, saveEntry, clearEntry }
+  return {
+    targets,
+    activeTargets,
+    archivedTargets,
+    totalEntries,
+    recordDates,
+    addTarget,
+    updateTarget,
+    deleteTarget,
+    archiveTarget,
+    restoreTarget,
+    moveTarget,
+    saveEntry,
+    clearEntry
+  }
 })

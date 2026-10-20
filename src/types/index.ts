@@ -141,6 +141,7 @@ export interface EmotionClusterTarget {
   theme?: string
   note: string
   entries: Record<string, EmotionClusterEntry>
+  archivedAt?: string
   createdAt: string
   updatedAt: string
 }
