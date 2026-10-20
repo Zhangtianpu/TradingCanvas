@@ -107,6 +107,19 @@ export const useEmotionClusterStore = defineStore('emotionCluster', () => {
     persist()
   }
 
+  function moveTarget(id: string, direction: 'up' | 'down') {
+    const index = targets.value.findIndex(item => item.id === id)
+    if (index < 0) return false
+    const targetIndex = direction === 'up' ? index - 1 : index + 1
+    if (targetIndex < 0 || targetIndex >= targets.value.length) return false
+    const reordered = [...targets.value]
+    const [target] = reordered.splice(index, 1)
+    reordered.splice(targetIndex, 0, target)
+    targets.value = reordered
+    persist()
+    return true
+  }
+
   function saveEntry(targetId: string, date: string, payload: Pick<EmotionClusterEntry, 'trend' | 'changePercent' | 'note'>) {
     const target = targets.value.find(item => item.id === targetId)
     if (!target) return
@@ -135,5 +148,5 @@ export const useEmotionClusterStore = defineStore('emotionCluster', () => {
 
   migrateLegacyStairData()
 
-  return { targets, totalEntries, recordDates, addTarget, updateTarget, deleteTarget, saveEntry, clearEntry }
+  return { targets, totalEntries, recordDates, addTarget, updateTarget, deleteTarget, moveTarget, saveEntry, clearEntry }
 })

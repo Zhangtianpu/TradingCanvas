@@ -47,7 +47,7 @@
       </div>
 
       <div v-if="store.targets.length" class="record-list">
-        <article v-for="target in store.targets" :key="target.id" class="record-card">
+        <article v-for="(target, targetIndex) in store.targets" :key="target.id" class="record-card">
           <div class="target-info">
             <div class="target-title">
               <strong>{{ target.name }}</strong>
@@ -56,6 +56,20 @@
             <div v-if="target.theme" class="theme-chip">{{ target.theme }}</div>
             <p>{{ target.note || '暂无标的备注' }}</p>
             <div class="target-actions">
+              <div class="move-actions" aria-label="调整标的顺序">
+                <button
+                  type="button"
+                  title="上移"
+                  :disabled="targetIndex === 0"
+                  @click="moveTarget(target, 'up')"
+                >↑ 上移</button>
+                <button
+                  type="button"
+                  title="下移"
+                  :disabled="targetIndex === store.targets.length - 1"
+                  @click="moveTarget(target, 'down')"
+                >↓ 下移</button>
+              </div>
               <button type="button" @click="openTargetEdit(target)">编辑标的</button>
               <button type="button" class="danger-text" @click="deleteTarget(target)">删除</button>
             </div>
@@ -209,6 +223,11 @@ function deleteTarget(target: EmotionClusterTarget) {
   toast.success('抱团标的已删除')
 }
 
+function moveTarget(target: EmotionClusterTarget, direction: 'up' | 'down') {
+  if (!store.moveTarget(target.id, direction)) return
+  toast.success(`${target.name} 已${direction === 'up' ? '上移' : '下移'}`)
+}
+
 function openTargetEdit(target: EmotionClusterTarget) {
   editingTarget.value = target
   Object.assign(editTargetForm, {
@@ -303,9 +322,13 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-blue); }
 .target-title span { color: var(--text-tertiary); font-size: 9px; }
 .theme-chip { display: inline-block; margin-top: 7px; padding: 2px 7px; color: var(--color-orange); background: rgba(240,136,62,.1); border-radius: 9px; font-size: 9px; }
 .target-info p { min-height: 28px; margin-top: 7px; color: var(--text-tertiary); font-size: 10px; line-height: 1.4; }
-.target-actions { display: flex; gap: 9px; margin-top: 7px; }
+.target-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin-top: 7px; }
 .target-actions button { padding: 0; color: var(--color-blue); background: none; font-size: 9px; }
 .target-actions .danger-text { color: var(--color-red); }
+.move-actions { display: inline-flex; gap: 3px; padding-right: 7px; border-right: 1px solid var(--border-color); }
+.target-actions .move-actions button { padding: 2px 5px; color: var(--text-secondary); background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 3px; }
+.target-actions .move-actions button:not(:disabled):hover { color: var(--color-blue); border-color: var(--color-blue); }
+.target-actions .move-actions button:disabled { cursor: default; opacity: .35; }
 .daily-fields { display: grid; grid-template-columns: 1.15fr .55fr 1.5fr auto; align-items: end; gap: 9px; padding: 12px; }
 .daily-actions { display: flex; gap: 6px; }
 .daily-actions button { height: 32px; padding: 0 10px; border-radius: 4px; font-size: 10px; }

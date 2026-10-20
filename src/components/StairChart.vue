@@ -236,14 +236,28 @@
       <div v-if="clusterTargets.length > 0" class="cluster-matrix">
         <div class="cluster-target-column">
           <div class="cluster-corner">标的 / 日期</div>
-          <div v-for="target in clusterTargets" :key="target.id" class="cluster-target-name" :title="target.name">
+          <div v-for="(target, targetIndex) in clusterTargets" :key="target.id" class="cluster-target-name" :title="target.name">
             <span>{{ target.name }}</span>
-            <button
-              v-if="!readOnly"
-              type="button"
-              title="删除标的"
-              @click="removeClusterTarget(target)"
-            >×</button>
+            <div v-if="!readOnly" class="cluster-target-controls">
+              <button
+                type="button"
+                title="上移"
+                :disabled="targetIndex === 0"
+                @click="moveClusterTarget(target, 'up')"
+              >↑</button>
+              <button
+                type="button"
+                title="下移"
+                :disabled="targetIndex === clusterTargets.length - 1"
+                @click="moveClusterTarget(target, 'down')"
+              >↓</button>
+              <button
+                type="button"
+                class="cluster-delete-button"
+                title="删除标的"
+                @click="removeClusterTarget(target)"
+              >×</button>
+            </div>
           </div>
         </div>
 
@@ -381,6 +395,7 @@
           <div class="edit-row">
             <label>涨跌幅（%）</label>
             <input
+              ref="clusterChangeInputRef"
               v-model="clusterEntryForm.changePercent"
               type="number"
               step="0.01"
@@ -634,6 +649,7 @@ loadHeightCalcOverrides()
 const clusterTargets = computed(() => clusterStore.targets)
 const newClusterTargetName = ref('')
 const editingClusterCell = ref<{ targetId: string; targetName: string; date: string } | null>(null)
+const clusterChangeInputRef = ref<HTMLInputElement | null>(null)
 const clusterEntryForm = ref<{ trend: string; changePercent: string | number }>({
   trend: '',
   changePercent: ''
@@ -655,6 +671,10 @@ function removeClusterTarget(target: EmotionClusterTarget) {
   clusterStore.deleteTarget(target.id)
 }
 
+function moveClusterTarget(target: EmotionClusterTarget, direction: 'up' | 'down') {
+  clusterStore.moveTarget(target.id, direction)
+}
+
 function openClusterEntry(target: EmotionClusterTarget, date: string) {
   if (props.readOnly) return
   const entry = target.entries[date]
@@ -665,6 +685,10 @@ function openClusterEntry(target: EmotionClusterTarget, date: string) {
       ? ''
       : String(entry.changePercent)
   }
+  nextTick(() => {
+    clusterChangeInputRef.value?.focus()
+    clusterChangeInputRef.value?.select()
+  })
 }
 
 function closeClusterEntry() {
@@ -1650,12 +1674,13 @@ function deleteEdit() {
 }
 
 .cluster-target-name {
+  position: relative;
   height: 56px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: 4px;
-  padding: 0 6px 0 8px;
+  padding: 4px 5px 19px;
   box-sizing: border-box;
   background: rgba(240, 192, 64, 0.08);
   border: 1px solid var(--border-color);
@@ -1666,26 +1691,47 @@ function deleteEdit() {
 }
 
 .cluster-target-name span {
+  width: 100%;
   min-width: 0;
   overflow: hidden;
+  text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.cluster-target-name button {
-  flex: 0 0 auto;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border-radius: 3px;
-  background: transparent;
-  color: var(--text-tertiary);
-  font-size: 15px;
-  line-height: 16px;
+.cluster-target-controls {
+  position: absolute;
+  right: 4px;
+  bottom: 3px;
+  display: flex;
+  gap: 3px;
 }
 
-.cluster-target-name button:hover {
+.cluster-target-controls button {
+  width: 16px;
+  height: 15px;
+  padding: 0;
+  border-radius: 3px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-tertiary);
+  font-size: 10px;
+  line-height: 12px;
+}
+
+.cluster-target-controls button:not(:disabled):hover {
+  border-color: var(--color-blue);
+  color: var(--color-blue);
+}
+
+.cluster-target-controls button:disabled {
+  cursor: default;
+  opacity: .3;
+}
+
+.cluster-target-controls .cluster-delete-button:not(:disabled):hover {
   background: rgba(248, 81, 73, 0.16);
+  border-color: rgba(248, 81, 73, .55);
   color: #f85149;
 }
 
