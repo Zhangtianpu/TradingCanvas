@@ -58,6 +58,7 @@
         <div class="market-overview-label promotion-rate" title="连板晋级率">晋级率</div>
         <div class="market-overview-label seal-rate" title="封板率">封板率</div>
         <div class="market-overview-label target-stocks" title="目标标的">目标</div>
+        <div class="market-overview-label anchor-result" title="情绪锚定结果">锚定</div>
         <div class="height-axis-spacer"></div>
         <div v-for="h in heightRange" :key="h" class="height-label" :class="{ 'row-highlight': hoveredHeight === h }">{{ h }}板</div>
         <div class="height-adjust">
@@ -92,6 +93,20 @@
               </div>
               <div class="market-overview-row target-stocks">
                 <div v-for="e in displayEmotions" :key="`target-stocks-${e.id}`" class="market-overview-cell" :style="{ width: cellWidth + 'px' }">{{ reviewStore.getReviewByDate(e.date)?.targetStocks || 0 }}</div>
+              </div>
+              <div class="market-overview-row anchor-result">
+                <div
+                  v-for="e in displayEmotions"
+                  :key="`anchor-result-${e.id}`"
+                  class="market-overview-cell"
+                  :style="{ width: cellWidth + 'px' }"
+                  :title="getAnchorResultTitle(e.date)"
+                >
+                  <span v-if="getAnchorResult(e.date)" class="anchor-result-badge" :class="getAnchorResultClass(e.date)">
+                    {{ getAnchorResult(e.date)?.label }}
+                  </span>
+                  <span v-else class="anchor-result-empty">—</span>
+                </div>
               </div>
             </div>
             <!-- 高度计算输入行（与表格同步滚动） -->
@@ -429,6 +444,7 @@ import { useStockStore } from '@/stores/stock'
 import { useReviewStore } from '@/stores/review'
 import { useIndependentLabelStore } from '@/stores/independentLabel'
 import { useEmotionClusterStore } from '@/stores/emotionCluster'
+import { useEmotionAnchorStore } from '@/stores/emotionAnchor'
 import { buildContinuousBoardPromotionRates } from '@/composables/useEmotionMetrics'
 
 const props = defineProps<{
@@ -493,12 +509,36 @@ const stockStore = useStockStore()
 const reviewStore = useReviewStore()
 const labelStore = useIndependentLabelStore()
 const clusterStore = useEmotionClusterStore()
+const anchorStore = useEmotionAnchorStore()
 const stairTagDefs = computed(() => labelStore.sortedLabels.filter(l => l.category === 'stair'))
 const stairDateTagDefs = computed(() => labelStore.sortedLabels.filter(l => l.category === 'stairDate'))
 const promotionRates = computed(() => buildContinuousBoardPromotionRates(props.emotions))
 
 function formatPercent(value: number) {
   return `${Number(value.toFixed(1))}%`
+}
+
+function getAnchorResult(date: string) {
+  const record = anchorStore.records.find(item => item.date === date)
+  if (!record) return null
+  const result = anchorStore.stats(record)
+  return result.judged > 0 ? result : null
+}
+
+function getAnchorResultTitle(date: string) {
+  const result = getAnchorResult(date)
+  if (!result) return '当日暂无情绪锚定判断'
+  return `${result.label} · 综合得分 ${result.score} · 超预期 ${result.above} · 符合预期 ${result.match} · 低预期 ${result.below}`
+}
+
+function getAnchorResultClass(date: string) {
+  const label = getAnchorResult(date)?.label
+  return {
+    'strong-repair': label === '强修复',
+    'weak-repair': label === '弱修复',
+    'weak-diverge': label === '弱分歧',
+    'strong-diverge': label === '强分歧'
+  }
 }
 
 function getDateTagKeys(e: EmotionDaily) {
@@ -1449,6 +1489,7 @@ function deleteEdit() {
 .market-overview-label.promotion-rate { color: var(--color-purple); }
 .market-overview-label.seal-rate { color: var(--color-blue); }
 .market-overview-label.target-stocks { color: #a371f7; }
+.market-overview-label.anchor-result { color: var(--color-orange); }
 
 .height-axis-spacer {
   width: 100%;
@@ -1546,6 +1587,29 @@ function deleteEdit() {
 .market-overview-row.promotion-rate .market-overview-cell { color: var(--color-purple); }
 .market-overview-row.seal-rate .market-overview-cell { color: var(--color-blue); }
 .market-overview-row.target-stocks .market-overview-cell { color: #a371f7; }
+.market-overview-row.anchor-result .market-overview-cell { color: var(--color-orange); }
+
+.anchor-result-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: calc(100% - 6px);
+  padding: 2px 4px;
+  overflow: hidden;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.anchor-result-badge.strong-repair { background: rgba(248, 81, 73, .9); }
+.anchor-result-badge.weak-repair { background: rgba(240, 136, 62, .9); }
+.anchor-result-badge.weak-diverge { background: rgba(88, 166, 255, .9); }
+.anchor-result-badge.strong-diverge { background: rgba(63, 185, 80, .9); }
+.anchor-result-empty { color: var(--text-tertiary); }
 
 /* 隐藏原生滚动条 */
 .table-scroll {

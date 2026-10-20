@@ -19,6 +19,19 @@ const LEGACY_MIGRATION_KEY = 'emotionClusterLegacyMigrated'
 export const useEmotionClusterStore = defineStore('emotionCluster', () => {
   const targets = ref<EmotionClusterTarget[]>(loadData().emotionClusters || [])
 
+  function earliestEntryDate(target: EmotionClusterTarget) {
+    return Object.keys(target.entries).sort((a, b) => a.localeCompare(b))[0] || '9999-12-31'
+  }
+
+  function defaultTargetComparator(a: EmotionClusterTarget, b: EmotionClusterTarget) {
+    const aHasManualOrder = Number.isFinite(a.displayOrder)
+    const bHasManualOrder = Number.isFinite(b.displayOrder)
+    if (aHasManualOrder && bHasManualOrder) return (a.displayOrder || 0) - (b.displayOrder || 0)
+    if (aHasManualOrder) return -1
+    if (bHasManualOrder) return 1
+    return earliestEntryDate(a).localeCompare(earliestEntryDate(b)) || a.createdAt.localeCompare(b.createdAt)
+  }
+
   function persist() {
     const data = loadData()
     data.emotionClusters = targets.value
@@ -76,6 +89,9 @@ export const useEmotionClusterStore = defineStore('emotionCluster', () => {
     const existing = targets.value.find(item => item.name === name)
     if (existing) return existing
     const now = new Date().toISOString()
+    const manualOrders = targets.value
+      .filter(item => !item.archivedAt && Number.isFinite(item.displayOrder))
+      .map(item => item.displayOrder as number)
     const target: EmotionClusterTarget = {
       id: generateId(),
       name,
@@ -83,6 +99,7 @@ export const useEmotionClusterStore = defineStore('emotionCluster', () => {
       theme: payload.theme?.trim() || undefined,
       note: payload.note.trim(),
       entries: {},
+      displayOrder: manualOrders.length ? Math.max(...manualOrders) + 1 : undefined,
       createdAt: now,
       updatedAt: now
     }
@@ -128,6 +145,10 @@ export const useEmotionClusterStore = defineStore('emotionCluster', () => {
     if (!target || !target.archivedAt) return false
     target.archivedAt = undefined
     target.updatedAt = new Date().toISOString()
+    const activeManualOrders = targets.value
+      .filter(item => item.id !== id && !item.archivedAt && Number.isFinite(item.displayOrder))
+      .map(item => item.displayOrder as number)
+    target.displayOrder = activeManualOrders.length ? Math.max(...activeManualOrders) + 1 : undefined
     const remaining = targets.value.filter(item => item.id !== id)
     targets.value = [
       ...remaining.filter(item => !item.archivedAt),
@@ -139,7 +160,7 @@ export const useEmotionClusterStore = defineStore('emotionCluster', () => {
   }
 
   function moveTarget(id: string, direction: 'up' | 'down') {
-    const active = targets.value.filter(item => !item.archivedAt)
+    const active = [...activeTargets.value]
     const archived = targets.value.filter(item => item.archivedAt)
     const index = active.findIndex(item => item.id === id)
     if (index < 0) return false
@@ -148,6 +169,7 @@ export const useEmotionClusterStore = defineStore('emotionCluster', () => {
     const reordered = [...active]
     const [target] = reordered.splice(index, 1)
     reordered.splice(targetIndex, 0, target)
+    reordered.forEach((item, order) => { item.displayOrder = order })
     targets.value = [...reordered, ...archived]
     persist()
     return true
@@ -178,7 +200,9 @@ export const useEmotionClusterStore = defineStore('emotionCluster', () => {
 
   const totalEntries = computed(() => targets.value.reduce((sum, target) => sum + Object.keys(target.entries).length, 0))
   const recordDates = computed(() => [...new Set(targets.value.flatMap(target => Object.keys(target.entries)))].sort((a, b) => b.localeCompare(a)))
-  const activeTargets = computed(() => targets.value.filter(target => !target.archivedAt))
+  const activeTargets = computed(() => targets.value
+    .filter(target => !target.archivedAt)
+    .sort(defaultTargetComparator))
   const archivedTargets = computed(() => targets.value
     .filter(target => target.archivedAt)
     .sort((a, b) => (b.archivedAt || '').localeCompare(a.archivedAt || '')))
