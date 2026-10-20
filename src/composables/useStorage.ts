@@ -112,6 +112,7 @@ function createDefaultData(): AppStorage {
     patternTrades: [],
     emotionAnchors: [],
     emotionAnchorSettings: getDefaultEmotionAnchorSettings(),
+    emotionClusters: [],
     settings: getDefaultSettings(),
     appVersion: APP_VERSION,
     lastBackupDate: ''
@@ -349,6 +350,7 @@ export function generateTestData(): AppStorage {
     patternTrades: [],
     emotionAnchors: [],
     emotionAnchorSettings: getDefaultEmotionAnchorSettings(),
+    emotionClusters: [],
     settings: getDefaultSettings(),
     appVersion: APP_VERSION,
     lastBackupDate: ''
@@ -371,6 +373,7 @@ export function loadData(): AppStorage {
       customCyclePhases: data.customCyclePhases ?? defaults.customCyclePhases,
       patternTrades: data.patternTrades ?? [],
       emotionAnchors: data.emotionAnchors ?? [],
+      emotionClusters: data.emotionClusters ?? [],
       emotionAnchorSettings: {
         ...defaults.emotionAnchorSettings,
         ...(data.emotionAnchorSettings ?? {})
@@ -415,8 +418,8 @@ export function saveData(data: AppStorage): void {
 }
 
 // 独立 localStorage key 的前缀和精确 key（用于导出/导入/清理）
-const EXTRA_KEY_PREFIXES = ['stairChartTags_', 'stairChartHeightCalc_', 'stairChartTitle_']
-const EXTRA_EXACT_KEYS = ['feeSettings', 'dashboardModuleOrder']
+const EXTRA_KEY_PREFIXES = ['stairChartTags_', 'stairChartHeightCalc_', 'stairChartTitle_', 'stairChartCluster_']
+const EXTRA_EXACT_KEYS = ['feeSettings', 'dashboardModuleOrder', 'emotionClusterLegacyMigrated']
 
 // 收集所有独立 localStorage 项
 function collectExtras(): Record<string, string> {

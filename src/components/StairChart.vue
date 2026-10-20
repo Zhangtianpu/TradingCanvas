@@ -219,6 +219,73 @@
     </div>
     <div v-else class="empty-hint">暂无数据</div>
 
+    <!-- 抱团标的：日期列与上方天梯图保持同步 -->
+    <section v-if="displayEmotions.length > 0" class="cluster-section">
+      <div class="cluster-header">
+        <div class="cluster-heading">
+          <strong>抱团标的</strong>
+          <small>逐日记录走势与涨跌幅</small>
+          <router-link to="/emotion-cluster" class="cluster-module-link">进入情绪抱团 →</router-link>
+        </div>
+        <form v-if="!readOnly" class="cluster-add-form" @submit.prevent="addClusterTarget">
+          <input v-model.trim="newClusterTargetName" type="text" placeholder="输入标的名称" maxlength="30" />
+          <button type="submit" class="btn-primary">+ 添加标的</button>
+        </form>
+      </div>
+
+      <div v-if="clusterTargets.length > 0" class="cluster-matrix">
+        <div class="cluster-target-column">
+          <div class="cluster-corner">标的 / 日期</div>
+          <div v-for="target in clusterTargets" :key="target.id" class="cluster-target-name" :title="target.name">
+            <span>{{ target.name }}</span>
+            <button
+              v-if="!readOnly"
+              type="button"
+              title="删除标的"
+              @click="removeClusterTarget(target)"
+            >×</button>
+          </div>
+        </div>
+
+        <div ref="clusterScrollRef" class="cluster-scroll" @scroll="onClusterScroll">
+          <div class="cluster-grid" :style="{ width: displayEmotions.length * cellWidth + 'px' }">
+            <div class="cluster-date-row">
+              <div
+                v-for="e in displayEmotions"
+                :key="`cluster-date-${e.id}`"
+                class="cluster-date-cell"
+                :style="{ width: cellWidth + 'px' }"
+              >{{ e.date.slice(5) }}</div>
+            </div>
+            <div v-for="target in clusterTargets" :key="target.id" class="cluster-target-row">
+              <button
+                v-for="e in displayEmotions"
+                :key="`${target.id}-${e.date}`"
+                type="button"
+                class="cluster-cell"
+                :class="getClusterCellClass(target, e.date)"
+                :style="{ width: cellWidth + 'px' }"
+                :disabled="readOnly"
+                :title="getClusterCellTitle(target, e.date)"
+                @click="openClusterEntry(target, e.date)"
+              >
+                <template v-if="target.entries[e.date]">
+                  <span class="cluster-trend">{{ target.entries[e.date].trend || '—' }}</span>
+                  <b v-if="target.entries[e.date].changePercent !== null" class="cluster-change">
+                    {{ formatChangePercent(target.entries[e.date].changePercent) }}
+                  </b>
+                </template>
+                <span v-else class="cluster-empty-cell">{{ readOnly ? '—' : '+' }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div v-else class="cluster-empty">
+        {{ readOnly ? '暂无抱团标的记录' : '添加标的后，可按日期填写走势和涨跌幅。' }}
+      </div>
+    </section>
+
     <!-- 日期节点标签弹窗 -->
     <div v-if="editingDate" class="edit-modal" @click.self="closeDateEdit">
       <div class="edit-dialog date-tag-dialog">
@@ -292,17 +359,55 @@
         </div>
       </div>
     </div>
+
+    <!-- 抱团标的每日记录弹窗 -->
+    <div v-if="editingClusterCell" class="edit-modal" @click.self="closeClusterEntry">
+      <div class="edit-dialog cluster-edit-dialog">
+        <div class="edit-header">
+          <span>{{ editingClusterCell.targetName }} · {{ editingClusterCell.date }}</span>
+          <button class="btn-close" @click="closeClusterEntry">×</button>
+        </div>
+        <div class="edit-body">
+          <div class="edit-row">
+            <label>当日走势</label>
+            <input
+              v-model.trim="clusterEntryForm.trend"
+              type="text"
+              maxlength="40"
+              placeholder="例如：高开回落、弱转强、横盘震荡"
+              @keyup.enter="saveClusterEntry"
+            />
+          </div>
+          <div class="edit-row">
+            <label>涨跌幅（%）</label>
+            <input
+              v-model="clusterEntryForm.changePercent"
+              type="number"
+              step="0.01"
+              placeholder="例如：5.68 或 -3.20"
+              @keyup.enter="saveClusterEntry"
+            />
+          </div>
+        </div>
+        <div class="edit-footer">
+          <button class="btn-danger" @click="clearClusterEntry">清空当天</button>
+          <button class="btn-secondary" @click="closeClusterEntry">取消</button>
+          <button class="btn-primary" @click="saveClusterEntry">保存</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import type { EmotionDaily, SpaceBoardStock } from '@/types'
+import type { EmotionClusterTarget, EmotionDaily, SpaceBoardStock } from '@/types'
 import { useEmotionStore } from '@/stores/emotion'
 import { useStockStore } from '@/stores/stock'
 import { useReviewStore } from '@/stores/review'
 import { useIndependentLabelStore } from '@/stores/independentLabel'
+import { useEmotionClusterStore } from '@/stores/emotionCluster'
 import { buildContinuousBoardPromotionRates } from '@/composables/useEmotionMetrics'
 
 const props = defineProps<{
@@ -366,6 +471,7 @@ const emotionStore = useEmotionStore()
 const stockStore = useStockStore()
 const reviewStore = useReviewStore()
 const labelStore = useIndependentLabelStore()
+const clusterStore = useEmotionClusterStore()
 const stairTagDefs = computed(() => labelStore.sortedLabels.filter(l => l.category === 'stair'))
 const stairDateTagDefs = computed(() => labelStore.sortedLabels.filter(l => l.category === 'stairDate'))
 const promotionRates = computed(() => buildContinuousBoardPromotionRates(props.emotions))
@@ -524,6 +630,104 @@ function updateHeightCalc(e: EmotionDaily, value: string) {
 // 初始化加载高度计算数据
 loadHeightCalcOverrides()
 
+// ===== 抱团标的逐日记录（与“情绪抱团”模块共用数据） =====
+const clusterTargets = computed(() => clusterStore.targets)
+const newClusterTargetName = ref('')
+const editingClusterCell = ref<{ targetId: string; targetName: string; date: string } | null>(null)
+const clusterEntryForm = ref<{ trend: string; changePercent: string | number }>({
+  trend: '',
+  changePercent: ''
+})
+
+function addClusterTarget() {
+  const name = newClusterTargetName.value.trim()
+  if (!name) return
+  if (clusterStore.targets.some(target => target.name === name)) {
+    window.alert('该抱团标的已存在。')
+    return
+  }
+  clusterStore.addTarget({ name, code: undefined, theme: undefined, note: '' })
+  newClusterTargetName.value = ''
+}
+
+function removeClusterTarget(target: EmotionClusterTarget) {
+  if (!window.confirm(`确定删除抱团标的“${target.name}”及其全部每日记录吗？`)) return
+  clusterStore.deleteTarget(target.id)
+}
+
+function openClusterEntry(target: EmotionClusterTarget, date: string) {
+  if (props.readOnly) return
+  const entry = target.entries[date]
+  editingClusterCell.value = { targetId: target.id, targetName: target.name, date }
+  clusterEntryForm.value = {
+    trend: entry?.trend || '',
+    changePercent: entry?.changePercent === null || entry?.changePercent === undefined
+      ? ''
+      : String(entry.changePercent)
+  }
+}
+
+function closeClusterEntry() {
+  editingClusterCell.value = null
+  clusterEntryForm.value = { trend: '', changePercent: '' }
+}
+
+function saveClusterEntry() {
+  if (!editingClusterCell.value) return
+  const target = clusterStore.targets.find(item => item.id === editingClusterCell.value?.targetId)
+  if (!target) return
+  const rawChange = String(clusterEntryForm.value.changePercent ?? '').trim()
+  const parsedChange = rawChange === '' ? null : Number(rawChange)
+  if (parsedChange !== null && !Number.isFinite(parsedChange)) {
+    window.alert('请输入正确的涨跌幅。')
+    return
+  }
+  const trend = clusterEntryForm.value.trend.trim()
+  if (!trend && parsedChange === null) {
+    clusterStore.clearEntry(target.id, editingClusterCell.value.date)
+  } else {
+    clusterStore.saveEntry(target.id, editingClusterCell.value.date, {
+      trend,
+      changePercent: parsedChange,
+      note: target.entries[editingClusterCell.value.date]?.note || ''
+    })
+  }
+  closeClusterEntry()
+}
+
+function clearClusterEntry() {
+  if (!editingClusterCell.value) return
+  const target = clusterStore.targets.find(item => item.id === editingClusterCell.value?.targetId)
+  if (target) {
+    clusterStore.clearEntry(target.id, editingClusterCell.value.date)
+  }
+  closeClusterEntry()
+}
+
+function formatChangePercent(value: number | null) {
+  if (value === null) return '—'
+  const prefix = value > 0 ? '+' : ''
+  return `${prefix}${Number(value.toFixed(2))}%`
+}
+
+function getClusterCellClass(target: EmotionClusterTarget, date: string) {
+  const value = target.entries[date]?.changePercent
+  return {
+    'has-entry': !!target.entries[date],
+    gain: typeof value === 'number' && value > 0,
+    loss: typeof value === 'number' && value < 0,
+    flat: value === 0
+  }
+}
+
+function getClusterCellTitle(target: EmotionClusterTarget, date: string) {
+  const entry = target.entries[date]
+  if (!entry) return props.readOnly ? '暂无记录' : '点击记录当日走势和涨跌幅'
+  return [entry.trend, entry.changePercent === null ? '' : formatChangePercent(entry.changePercent)]
+    .filter(Boolean)
+    .join(' · ')
+}
+
 // 连板楼梯图独立的显示范围控制
 const timeRanges = [
   { label: '10天', value: 10 },
@@ -552,6 +756,7 @@ function applyCustomStairRange() {
 
 // 拖拽滚动条
 const scrollContainerRef = ref<HTMLElement | null>(null)
+const clusterScrollRef = ref<HTMLElement | null>(null)
 const scrollbarRef = ref<HTMLElement | null>(null)
 const thumbWidth = ref(100)
 const thumbLeft = ref(0)
@@ -581,8 +786,21 @@ function updateScrollbar() {
 }
 
 function onScroll() {
+  const main = scrollContainerRef.value
+  const cluster = clusterScrollRef.value
+  if (main && cluster && Math.abs(cluster.scrollLeft - main.scrollLeft) > 0.5) {
+    cluster.scrollLeft = main.scrollLeft
+  }
   // 拖动时也需要更新 thumb 位置（提供视觉反馈）
   updateScrollbar()
+}
+
+function onClusterScroll() {
+  const main = scrollContainerRef.value
+  const cluster = clusterScrollRef.value
+  if (main && cluster && Math.abs(main.scrollLeft - cluster.scrollLeft) > 0.5) {
+    main.scrollLeft = cluster.scrollLeft
+  }
 }
 
 function onScrollbarMouseDown(e: MouseEvent) {
@@ -644,6 +862,9 @@ onMounted(() => {
   // 多次延迟更新，确保表格完全渲染
   nextTick(() => {
     updateScrollbar()
+    if (scrollContainerRef.value && clusterScrollRef.value) {
+      clusterScrollRef.value.scrollLeft = scrollContainerRef.value.scrollLeft
+    }
     nextTick(updateScrollbar)
   })
   window.addEventListener('resize', updateScrollbar)
@@ -666,6 +887,9 @@ onBeforeUnmount(() => {
 watch(() => displayEmotions.value, () => {
   nextTick(() => {
     updateScrollbar()
+    if (scrollContainerRef.value && clusterScrollRef.value) {
+      clusterScrollRef.value.scrollLeft = scrollContainerRef.value.scrollLeft
+    }
     nextTick(updateScrollbar)
   })
 }, { deep: true })
@@ -1015,6 +1239,7 @@ function deleteEdit() {
 
 <style scoped>
 .stair-chart {
+  --stair-axis-width: 96px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 8px;
@@ -1169,10 +1394,11 @@ function deleteEdit() {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  width: var(--stair-axis-width);
 }
 
 .market-overview-label {
-  width: 44px;
+  width: 100%;
   height: 26px;
   display: flex;
   align-items: center;
@@ -1191,7 +1417,7 @@ function deleteEdit() {
 .market-overview-label.target-stocks { color: #a371f7; }
 
 .height-axis-spacer {
-  width: 44px;
+  width: 100%;
   height: 74px; /* 概况表间距(4px) + 高度输入行(32px) + 日期表头(38px) */
   flex-shrink: 0;
 }
@@ -1203,7 +1429,7 @@ function deleteEdit() {
   justify-content: flex-end;
   font-size: 12px;
   color: var(--text-secondary);
-  width: 44px;
+  width: 100%;
 }
 
 .height-adjust {
@@ -1211,7 +1437,7 @@ function deleteEdit() {
   gap: 4px;
   margin-top: 4px;
   justify-content: center;
-  width: 44px;
+  width: 100%;
 }
 
 .height-btn {
@@ -1333,6 +1559,240 @@ function deleteEdit() {
 
 .custom-scrollbar.is-disabled:hover .scrollbar-thumb {
   opacity: 0.3;
+}
+
+/* 抱团标的矩阵 */
+.cluster-section {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.cluster-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.cluster-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.cluster-heading strong {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.cluster-heading small {
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.cluster-module-link {
+  color: var(--color-blue);
+  font-size: 10px;
+}
+
+.cluster-add-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cluster-add-form input {
+  width: 150px;
+  padding: 6px 9px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.cluster-add-form input:focus {
+  outline: none;
+  border-color: var(--color-blue);
+}
+
+.cluster-add-form button {
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.cluster-matrix {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cluster-target-column {
+  width: var(--stair-axis-width);
+  flex: 0 0 var(--stair-axis-width);
+}
+
+.cluster-corner,
+.cluster-date-cell {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.cluster-target-name {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 0 6px 0 8px;
+  box-sizing: border-box;
+  background: rgba(240, 192, 64, 0.08);
+  border: 1px solid var(--border-color);
+  border-top: 0;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cluster-target-name span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cluster-target-name button {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 15px;
+  line-height: 16px;
+}
+
+.cluster-target-name button:hover {
+  background: rgba(248, 81, 73, 0.16);
+  color: #f85149;
+}
+
+.cluster-scroll {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.cluster-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.cluster-date-row,
+.cluster-target-row {
+  display: flex;
+}
+
+.cluster-date-cell {
+  flex: 0 0 auto;
+  border-left: 0;
+}
+
+.cluster-date-cell:first-child {
+  border-left: 1px solid var(--border-color);
+}
+
+.cluster-cell {
+  height: 56px;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  box-sizing: border-box;
+  padding: 4px;
+  overflow: hidden;
+  background: var(--bg-primary);
+  border: 0;
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.cluster-cell:first-child {
+  border-left: 1px solid var(--border-color);
+}
+
+.cluster-cell:not(:disabled):hover {
+  background: var(--bg-hover);
+  box-shadow: inset 0 0 0 1px rgba(88, 166, 255, 0.45);
+}
+
+.cluster-cell:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.cluster-cell.has-entry {
+  background: rgba(88, 166, 255, 0.06);
+}
+
+.cluster-cell.gain { background: rgba(248, 81, 73, 0.11); }
+.cluster-cell.loss { background: rgba(63, 185, 80, 0.11); }
+.cluster-cell.flat { background: rgba(139, 148, 158, 0.10); }
+
+.cluster-trend {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cluster-change {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cluster-cell.gain .cluster-change { color: var(--color-red); }
+.cluster-cell.loss .cluster-change { color: var(--color-green); }
+.cluster-cell.flat .cluster-change { color: var(--text-secondary); }
+
+.cluster-empty-cell {
+  color: var(--text-tertiary);
+  font-size: 14px;
+}
+
+.cluster-empty {
+  padding: 18px;
+  border: 1px dashed var(--border-color);
+  border-radius: 6px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  text-align: center;
+}
+
+.cluster-edit-dialog {
+  width: 360px;
 }
 
 .stair-table {
@@ -1860,6 +2320,7 @@ function deleteEdit() {
 }
 
 .edit-row input[type="text"],
+.edit-row input[type="number"],
 .stock-select {
   width: 100%;
   padding: 8px 12px;

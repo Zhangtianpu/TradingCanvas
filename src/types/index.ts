@@ -125,6 +125,26 @@ export interface EmotionAnchorSettings {
   weakDivergeMin: number
 }
 
+// 情绪抱团：维护核心抱团标的，并按交易日记录走势和涨跌幅。
+export interface EmotionClusterEntry {
+  date: string
+  trend: string
+  changePercent: number | null
+  note: string
+  updatedAt: string
+}
+
+export interface EmotionClusterTarget {
+  id: string
+  name: string
+  code?: string
+  theme?: string
+  note: string
+  entries: Record<string, EmotionClusterEntry>
+  createdAt: string
+  updatedAt: string
+}
+
 // 个股
 export interface Stock {
   id: string
@@ -349,6 +369,7 @@ export interface AppStorage {
   patternTrades: PatternTrade[]
   emotionAnchors: EmotionAnchorDaily[]
   emotionAnchorSettings: EmotionAnchorSettings
+  emotionClusters: EmotionClusterTarget[]
   settings: AppSettings
   appVersion: string
   lastBackupDate: string
