@@ -21,7 +21,9 @@
         <span class="legend-item"><span class="dot median"></span>中位</span>
         <span class="legend-item"><span class="dot ice"></span>冰点</span>
         <span class="legend-item"><span class="dot announcement"></span>公告</span>
-        <span class="legend-item"><span class="dot clear"></span>出清</span>
+        <span v-for="def in stairDateTagDefs" :key="def.key" class="legend-item">
+          <span class="date-legend-badge" :style="{ background: def.color }">{{ def.badge || def.name.slice(0, 1) }}</span>{{ def.name }}
+        </span>
       </div>
     </div>
     <!-- 显示范围控制 -->
@@ -49,6 +51,14 @@
     <div class="chart-body" v-if="displayEmotions.length > 0">
       <!-- 高度标签 -->
       <div class="height-labels">
+        <div class="market-overview-label up">上涨</div>
+        <div class="market-overview-label limit-up">涨停</div>
+        <div class="market-overview-label limit-down">跌停</div>
+        <div class="market-overview-label board-count" title="连板家数">连板</div>
+        <div class="market-overview-label promotion-rate" title="连板晋级率">晋级率</div>
+        <div class="market-overview-label seal-rate" title="封板率">封板率</div>
+        <div class="market-overview-label target-stocks" title="目标标的">目标</div>
+        <div class="height-axis-spacer"></div>
         <div v-for="h in heightRange" :key="h" class="height-label" :class="{ 'row-highlight': hoveredHeight === h }">{{ h }}板</div>
         <div class="height-adjust">
           <button class="height-btn" @click="addHeightLevel" title="增加板高">+</button>
@@ -60,6 +70,30 @@
         <!-- 表格（含高度输入行，同步滚动） -->
         <div class="table-wrapper">
           <div class="table-scroll" ref="scrollContainerRef" @scroll="onScroll">
+            <!-- 涨跌概况（与日期列和天梯表同步滚动） -->
+            <div class="market-overview-table" :style="{ width: displayEmotions.length * cellWidth + 'px' }">
+              <div class="market-overview-row up">
+                <div v-for="e in displayEmotions" :key="`up-${e.id}`" class="market-overview-cell" :style="{ width: cellWidth + 'px' }">{{ e.upCount || 0 }}</div>
+              </div>
+              <div class="market-overview-row limit-up">
+                <div v-for="e in displayEmotions" :key="`limit-up-${e.id}`" class="market-overview-cell" :style="{ width: cellWidth + 'px' }">{{ e.limitUpCount || 0 }}</div>
+              </div>
+              <div class="market-overview-row limit-down">
+                <div v-for="e in displayEmotions" :key="`limit-down-${e.id}`" class="market-overview-cell" :style="{ width: cellWidth + 'px' }">{{ e.limitDownCount || 0 }}</div>
+              </div>
+              <div class="market-overview-row board-count">
+                <div v-for="e in displayEmotions" :key="`board-count-${e.id}`" class="market-overview-cell" :style="{ width: cellWidth + 'px' }">{{ e.continuousBoardCount || 0 }}</div>
+              </div>
+              <div class="market-overview-row promotion-rate">
+                <div v-for="e in displayEmotions" :key="`promotion-rate-${e.id}`" class="market-overview-cell" :style="{ width: cellWidth + 'px' }">{{ formatPercent(promotionRates[e.date] || 0) }}</div>
+              </div>
+              <div class="market-overview-row seal-rate">
+                <div v-for="e in displayEmotions" :key="`seal-rate-${e.id}`" class="market-overview-cell" :style="{ width: cellWidth + 'px' }">{{ formatPercent(e.sealRate || 0) }}</div>
+              </div>
+              <div class="market-overview-row target-stocks">
+                <div v-for="e in displayEmotions" :key="`target-stocks-${e.id}`" class="market-overview-cell" :style="{ width: cellWidth + 'px' }">{{ reviewStore.getReviewByDate(e.date)?.targetStocks || 0 }}</div>
+              </div>
+            </div>
             <!-- 高度计算输入行（与表格同步滚动） -->
             <div class="height-input-bar" :style="{ width: displayEmotions.length * cellWidth + 'px' }">
               <input
@@ -84,12 +118,19 @@
                     v-for="e in displayEmotions"
                     :key="e.id"
                     class="date-header"
-                  :class="{ 'is-clear': e.isClear }"
+                  :class="{ 'has-date-tag': getActiveDateTagDefs(e).length > 0 }"
                   @click="!readOnly && handleDateClick(e)"
-                  :title="readOnly ? '' : (e.isClear ? '点击取消出清标记' : '点击标记为出清')"
+                  :title="readOnly ? '' : '点击设置日期节点标签'"
                 >
                     {{ e.date.slice(5) }}
-                    <span v-if="e.isClear" class="clear-badge">清</span>
+                    <span class="date-badges">
+                      <span
+                        v-for="def in getActiveDateTagDefs(e)"
+                        :key="def.key"
+                        class="date-tag-badge"
+                        :style="{ background: def.color }"
+                      >{{ def.badge || def.name.slice(0, 1) }}</span>
+                    </span>
                   </th>
                 </tr>
               </thead>
@@ -178,6 +219,33 @@
     </div>
     <div v-else class="empty-hint">暂无数据</div>
 
+    <!-- 日期节点标签弹窗 -->
+    <div v-if="editingDate" class="edit-modal" @click.self="closeDateEdit">
+      <div class="edit-dialog date-tag-dialog">
+        <div class="edit-header">
+          <span>{{ editingDate.date }} · 日期节点</span>
+          <button class="btn-close" @click="closeDateEdit">×</button>
+        </div>
+        <div class="edit-body">
+          <p class="date-tag-help">可选择一个或多个节点标签，保存后同步到折线图。</p>
+          <div class="date-tag-grid">
+            <label v-for="def in stairDateTagDefs" :key="def.key" class="date-tag-option">
+              <input v-model="dateTagKeys" type="checkbox" :value="def.key" />
+              <span :style="{ background: def.color }">{{ def.badge || def.name.slice(0, 1) }}</span>
+              <b>{{ def.name }}</b>
+              <small>{{ def.description }}</small>
+            </label>
+          </div>
+          <div v-if="stairDateTagDefs.length === 0" class="empty-hint">请先在标签管理中创建天梯日期标签。</div>
+        </div>
+        <div class="edit-footer">
+          <button class="btn-danger" @click="clearDateTags">清除标记</button>
+          <button class="btn-secondary" @click="closeDateEdit">取消</button>
+          <button class="btn-primary" @click="saveDateTags">保存</button>
+        </div>
+      </div>
+    </div>
+
     <!-- 编辑弹窗 -->
     <div v-if="editingCell" class="edit-modal" @click.self="closeEdit">
       <div class="edit-dialog">
@@ -233,7 +301,9 @@ import { useRouter } from 'vue-router'
 import type { EmotionDaily, SpaceBoardStock } from '@/types'
 import { useEmotionStore } from '@/stores/emotion'
 import { useStockStore } from '@/stores/stock'
+import { useReviewStore } from '@/stores/review'
 import { useIndependentLabelStore } from '@/stores/independentLabel'
+import { buildContinuousBoardPromotionRates } from '@/composables/useEmotionMetrics'
 
 const props = defineProps<{
   emotions: EmotionDaily[]
@@ -294,8 +364,28 @@ loadCustomTitle()
 const router = useRouter()
 const emotionStore = useEmotionStore()
 const stockStore = useStockStore()
+const reviewStore = useReviewStore()
 const labelStore = useIndependentLabelStore()
 const stairTagDefs = computed(() => labelStore.sortedLabels.filter(l => l.category === 'stair'))
+const stairDateTagDefs = computed(() => labelStore.sortedLabels.filter(l => l.category === 'stairDate'))
+const promotionRates = computed(() => buildContinuousBoardPromotionRates(props.emotions))
+
+function formatPercent(value: number) {
+  return `${Number(value.toFixed(1))}%`
+}
+
+function getDateTagKeys(e: EmotionDaily) {
+  const keys = new Set(e.stairDateTags || [])
+  // 兼容旧版已保存的布尔标记。
+  if (e.isClear) keys.add('isClear')
+  if (e.isLeaderBreak) keys.add('isLeaderBreak')
+  return [...keys]
+}
+
+function getActiveDateTagDefs(e: EmotionDaily) {
+  const active = getDateTagKeys(e)
+  return stairDateTagDefs.value.filter(def => active.includes(def.key))
+}
 
 // ===== 独立标签管理系统 =====
 // 每个图表实例独立存储标签数据，不共享
@@ -585,6 +675,8 @@ const hoveredHeight = ref<number | null>(null)
 
 // 编辑状态
 const editingCell = ref<{ date: string; height: number; emotion: EmotionDaily } | null>(null)
+const editingDate = ref<EmotionDaily | null>(null)
+const dateTagKeys = ref<string[]>([])
 const editForm = ref({
   stockName: '',
   selectedStockId: '',
@@ -797,12 +889,35 @@ function closeEdit() {
   editingCell.value = null
 }
 
-// 点击日期，标记/取消出清
+// 点击日期，打开日期节点标签选择。
 function handleDateClick(e: EmotionDaily) {
+  editingDate.value = e
+  dateTagKeys.value = getDateTagKeys(e)
+}
+
+function closeDateEdit() {
+  editingDate.value = null
+  dateTagKeys.value = []
+}
+
+function saveDateTags() {
+  if (!editingDate.value) return
+  const selected = [...new Set(dateTagKeys.value)]
   emotionStore.addOrUpdateEmotion({
-    ...e,
-    isClear: !e.isClear
+    ...editingDate.value,
+    stairDateTags: selected,
+    isClear: selected.includes('isClear'),
+    isLeaderBreak: selected.includes('isLeaderBreak')
   })
+  window.dispatchEvent(new CustomEvent('stairChartTagsUpdated', {
+    detail: { chartId: props.chartId, dateTags: true }
+  }))
+  closeDateEdit()
+}
+
+function clearDateTags() {
+  dateTagKeys.value = []
+  saveDateTags()
 }
 
 // 保存编辑
@@ -1053,7 +1168,32 @@ function deleteEdit() {
 .height-labels {
   display: flex;
   flex-direction: column;
-  padding-top: 70px;  /* 对齐高度输入行(32px) + 表头(38px) */
+  flex-shrink: 0;
+}
+
+.market-overview-label {
+  width: 44px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.market-overview-label.up,
+.market-overview-label.limit-up { color: var(--color-red); }
+.market-overview-label.limit-down { color: var(--color-green); }
+.market-overview-label.board-count { color: var(--color-gold); border-top: 2px solid var(--border-color); }
+.market-overview-label.promotion-rate { color: var(--color-purple); }
+.market-overview-label.seal-rate { color: var(--color-blue); }
+.market-overview-label.target-stocks { color: #a371f7; }
+
+.height-axis-spacer {
+  width: 44px;
+  height: 74px; /* 概况表间距(4px) + 高度输入行(32px) + 日期表头(38px) */
+  flex-shrink: 0;
 }
 
 .height-label {
@@ -1063,7 +1203,7 @@ function deleteEdit() {
   justify-content: flex-end;
   font-size: 12px;
   color: var(--text-secondary);
-  width: 36px;
+  width: 44px;
 }
 
 .height-adjust {
@@ -1071,7 +1211,7 @@ function deleteEdit() {
   gap: 4px;
   margin-top: 4px;
   justify-content: center;
-  width: 36px;
+  width: 44px;
 }
 
 .height-btn {
@@ -1112,6 +1252,40 @@ function deleteEdit() {
 .table-scroll {
   overflow-x: auto;
 }
+
+.market-overview-table {
+  margin-bottom: 4px;
+  border-top: 1px solid var(--border-color);
+  border-left: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.market-overview-row {
+  display: flex;
+  height: 26px;
+}
+
+.market-overview-cell {
+  height: 26px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(88, 166, 255, 0.035);
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.market-overview-row.up .market-overview-cell,
+.market-overview-row.limit-up .market-overview-cell { color: var(--color-red); }
+.market-overview-row.limit-down .market-overview-cell { color: var(--color-green); }
+.market-overview-row.board-count .market-overview-cell { color: var(--color-gold); border-top: 2px solid var(--border-color); }
+.market-overview-row.promotion-rate .market-overview-cell { color: var(--color-purple); }
+.market-overview-row.seal-rate .market-overview-cell { color: var(--color-blue); }
+.market-overview-row.target-stocks .market-overview-cell { color: #a371f7; }
 
 /* 隐藏原生滚动条 */
 .table-scroll {
@@ -1206,22 +1380,40 @@ function deleteEdit() {
   color: var(--text-primary);
 }
 
-.date-header.is-clear {
+.date-header.has-date-tag {
   background: rgba(139, 148, 158, 0.25);
-  color: #8b949e;
+  color: var(--text-primary);
 }
 
-.clear-badge {
+.date-badges {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: 2px;
+  vertical-align: middle;
+}
+
+.date-tag-badge,
+.date-legend-badge {
   display: inline-block;
   font-size: 9px;
-  background: #8b949e;
   color: #fff;
   padding: 1px 3px;
   border-radius: 3px;
-  margin-left: 2px;
   font-weight: 500;
   vertical-align: middle;
 }
+
+.date-legend-badge { margin-right: 2px; }
+
+.date-tag-dialog { width: min(520px, calc(100vw - 32px)); }
+.date-tag-help { margin-bottom: 12px; color: var(--text-secondary); font-size: 11px; }
+.date-tag-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.date-tag-option { display: grid; grid-template-columns: 24px 1fr; grid-template-rows: auto auto; column-gap: 9px; padding: 10px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 7px; cursor: pointer; }
+.date-tag-option input { position: absolute; opacity: 0; pointer-events: none; }
+.date-tag-option > span { grid-row: 1 / 3; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; color: #fff; border-radius: 5px; font-size: 11px; font-weight: 700; }
+.date-tag-option b { font-size: 12px; }
+.date-tag-option small { margin-top: 2px; color: var(--text-tertiary); font-size: 9px; line-height: 1.35; }
+.date-tag-option:has(input:checked) { border-color: var(--color-blue); box-shadow: inset 0 0 0 1px rgba(88,166,255,.25); }
 
 /* 高度输入行（与表格同步滚动） */
 .height-input-bar {

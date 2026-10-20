@@ -197,6 +197,8 @@ export interface EmotionDaily {
   isIcePoint: boolean        // 是否冰点
   isAnnouncement: boolean    // 是否公告
   isClear: boolean           // 是否出清
+  isLeaderBreak?: boolean    // 龙头是否断板
+  stairDateTags?: string[]   // 天梯图日期级标签
   remark: string             // 备注
   // 情绪判断
   phase: EmotionPhase
@@ -267,7 +269,7 @@ export type IndependentFundTag = string
 export type IndependentFlowKind = 'breakout' | 'rebound' | 'custom'
 
 // 个股分析标签（身位/状态/资金性质）
-export type IndependentLabelCategory = 'position' | 'status' | 'fund' | 'stair'
+export type IndependentLabelCategory = 'position' | 'status' | 'fund' | 'stair' | 'stairDate'
 
 export interface IndependentLabel {
   id: string

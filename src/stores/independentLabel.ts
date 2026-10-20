@@ -13,14 +13,15 @@ export const LABEL_CATEGORY_OPTIONS: Array<{ key: IndependentLabelCategory; labe
   { key: 'position', label: '身位' },
   { key: 'status', label: '状态' },
   { key: 'fund', label: '资金性质' },
-  { key: 'stair', label: '天梯图' }
+  { key: 'stair', label: '天梯图' },
+  { key: 'stairDate', label: '天梯日期' }
 ]
 
 function mergeDefaultLabels(stored: IndependentLabel[]): IndependentLabel[] {
   const defaults = getDefaultIndependentLabels()
   const merged = stored.map(item => {
     const def = defaults.find(d => d.category === item.category && d.key === item.key)
-    if (def && !item.badge) return { ...item, badge: def.badge }
+    if (def) return { ...def, ...item, badge: item.badge || def.badge, isDefault: true }
     return item
   })
   for (const def of defaults) {
@@ -45,7 +46,7 @@ export const useIndependentLabelStore = defineStore('independentLabel', () => {
   }
 
   const sortedLabels = computed(() => {
-    const order: IndependentLabelCategory[] = ['position', 'status', 'fund', 'stair']
+    const order: IndependentLabelCategory[] = ['position', 'status', 'fund', 'stair', 'stairDate']
     return [...labels.value].sort((a, b) => {
       const diff = order.indexOf(a.category) - order.indexOf(b.category)
       if (diff !== 0) return diff

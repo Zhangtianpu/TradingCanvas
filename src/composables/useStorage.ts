@@ -79,7 +79,11 @@ export function getDefaultIndependentLabels(): IndependentLabel[] {
     { id: 'il-stair-no-premium', category: 'stair', key: 'isNextDayNoPremium', name: '次日无溢价', color: '#8b949e', badge: '无', description: '次日无溢价反馈', isDefault: true, createdAt: now },
     { id: 'il-stair-premium', category: 'stair', key: 'isNextDayPremium', name: '次日有溢价', color: '#3fb950', badge: '溢', description: '次日溢价反馈', isDefault: true, createdAt: now }
   ]
-  return [...regular, ...stairLabels]
+  const stairDateLabels: IndependentLabel[] = [
+    { id: 'il-stair-date-clear', category: 'stairDate', key: 'isClear', name: '中位出清', color: '#f0883e', badge: '清', description: '中位股大面积出清的日期节点', isDefault: true, createdAt: now },
+    { id: 'il-stair-date-leader-break', category: 'stairDate', key: 'isLeaderBreak', name: '龙头断板', color: '#f85149', badge: '断', description: '核心龙头首次断板的日期节点', isDefault: true, createdAt: now }
+  ]
+  return [...regular, ...stairLabels, ...stairDateLabels]
 }
 
 function getDefaultCyclePhases(): CustomCyclePhase[] {
@@ -361,6 +365,8 @@ export function loadData(): AppStorage {
     return {
       ...defaults,
       ...data,
+      emotions: migrateStairDateTags(data.emotions ?? defaults.emotions),
+      independentLabels: mergeIndependentLabelDefaults(data.independentLabels ?? defaults.independentLabels),
       customTradeStyles: data.customTradeStyles ?? defaults.customTradeStyles,
       customCyclePhases: data.customCyclePhases ?? defaults.customCyclePhases,
       patternTrades: data.patternTrades ?? [],
@@ -374,6 +380,30 @@ export function loadData(): AppStorage {
   } catch {
     return createDefaultData()
   }
+}
+
+function migrateStairDateTags(emotions: EmotionDaily[]): EmotionDaily[] {
+  return emotions.map(emotion => {
+    const tags = new Set(emotion.stairDateTags || [])
+    // 旧版的 isClear 是原始出清记录，迁移时必须保留。
+    if (emotion.isClear) tags.add('isClear')
+    if (emotion.isLeaderBreak) tags.add('isLeaderBreak')
+    return { ...emotion, stairDateTags: [...tags] }
+  })
+}
+
+function mergeIndependentLabelDefaults(stored: IndependentLabel[]): IndependentLabel[] {
+  const defaults = getDefaultIndependentLabels()
+  const merged = stored.map(item => {
+    const defaultLabel = defaults.find(label => label.category === item.category && label.key === item.key)
+    return defaultLabel ? { ...defaultLabel, ...item, isDefault: true } : item
+  })
+  defaults.forEach(defaultLabel => {
+    if (!merged.some(item => item.category === defaultLabel.category && item.key === defaultLabel.key)) {
+      merged.push({ ...defaultLabel })
+    }
+  })
+  return merged
 }
 
 export function saveData(data: AppStorage): void {
@@ -470,6 +500,8 @@ export function importData(file: File): Promise<AppStorage> {
         const merged = {
           ...createDefaultData(),
           ...data,
+          emotions: migrateStairDateTags(data.emotions || []),
+          independentLabels: mergeIndependentLabelDefaults(data.independentLabels || []),
           appVersion: APP_VERSION
         }
         saveData(merged)

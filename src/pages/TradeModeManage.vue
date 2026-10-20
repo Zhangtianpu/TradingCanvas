@@ -107,7 +107,7 @@
       </div>
       <div class="stock-category-bar">
         <button
-          v-for="cat in LABEL_CATEGORY_OPTIONS"
+          v-for="cat in LABEL_CATEGORY_OPTIONS.filter(item => !['stair', 'stairDate'].includes(item.key))"
           :key="cat.key"
           class="category-btn"
           :class="{ active: activeStockCategory === cat.key }"
@@ -153,7 +153,7 @@
     <!-- 天梯图标签 -->
     <div v-if="activeTab === 'stairLabels'" class="tab-content">
       <div class="content-header">
-        <span class="content-title">天梯图标签</span>
+        <span class="content-title">个股单元格标签</span>
         <button class="btn-add" @click="openStockFlowAdd('stair')">+ 新建</button>
       </div>
       <div class="mode-grid">
@@ -187,6 +187,37 @@
         v-if="independentLabelStore.sortedLabels.filter(l => l.category === 'stair').length === 0"
         class="empty-state"
       >暂无标签</div>
+
+      <div class="content-header stair-date-heading">
+        <div>
+          <span class="content-title">日期节点标签</span>
+          <small>点击天梯图日期时可选择</small>
+        </div>
+        <button class="btn-add" @click="openStockFlowAdd('stairDate')">+ 新建</button>
+      </div>
+      <div class="mode-grid">
+        <div
+          v-for="label in independentLabelStore.sortedLabels.filter(l => l.category === 'stairDate')"
+          :key="label.id"
+          class="mode-card"
+        >
+          <div class="mode-color" :style="{ background: label.color }"></div>
+          <div class="mode-info">
+            <div class="mode-name">
+              <span class="badge-preview" :style="{ background: label.color }">{{ label.badge || label.name.slice(0, 1) }}</span>
+              {{ label.name }}
+              <span v-if="label.isDefault" class="default-tag">默认</span>
+            </div>
+            <div class="mode-desc" v-if="label.description">{{ label.description }}</div>
+            <div class="mode-desc empty" v-else>暂无说明</div>
+          </div>
+          <div class="mode-actions">
+            <button class="btn-edit" @click="openStockFlowEdit(label)">编辑</button>
+            <button v-if="!label.isDefault" class="btn-del" @click="handleDelete('stockFlowLabels', label.id)">删除</button>
+            <span v-else class="lock-hint" title="默认项不可删除">🔒</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- 添加/编辑弹窗 -->
@@ -204,7 +235,7 @@
               @keyup.enter="handleSave"
             />
           </div>
-          <div v-if="editingType === 'stockFlowLabels' && activeStockCategory === 'stair'" class="form-row">
+          <div v-if="editingType === 'stockFlowLabels' && ['stair', 'stairDate'].includes(activeStockCategory)" class="form-row">
             <label class="form-label">天梯图简称</label>
             <input
               type="text"
@@ -328,6 +359,7 @@ const namePlaceholder = computed(() => {
     if (activeStockCategory.value === 'position') return '如：龙头、补涨'
     if (activeStockCategory.value === 'status') return '如：连板、断板反包'
     if (activeStockCategory.value === 'stair') return '如：高度突破、次日炸板'
+    if (activeStockCategory.value === 'stairDate') return '如：中位出清、龙头断板'
     return '如：独立、高低切'
   }
   return '如：启动、主升、分歧、退潮'
@@ -372,7 +404,7 @@ function openStockFlowAdd(category: IndependentLabelCategory) {
     badge: '',
     description: ''
   }
-  if (category === 'stair') {
+  if (category === 'stair' || category === 'stairDate') {
     activeTab.value = 'stairLabels'
   } else {
     activeTab.value = 'stockFlowLabels'
@@ -381,7 +413,7 @@ function openStockFlowAdd(category: IndependentLabelCategory) {
 }
 
 function openStockFlowEdit(item: IndependentLabel) {
-  activeTab.value = item.category === 'stair' ? 'stairLabels' : 'stockFlowLabels'
+  activeTab.value = item.category === 'stair' || item.category === 'stairDate' ? 'stairLabels' : 'stockFlowLabels'
   activeStockCategory.value = item.category
   editingType.value = 'stockFlowLabels'
   editingId.value = item.id
@@ -556,6 +588,19 @@ function handleDelete(type: TabKey, id: string) {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.stair-date-heading {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.stair-date-heading small {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-tertiary);
+  font-size: 10px;
 }
 
 .btn-add {

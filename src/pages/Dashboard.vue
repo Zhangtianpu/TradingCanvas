@@ -96,6 +96,11 @@
               <div v-for="group in chartGroups" :key="group.name" class="chart-group">
                 <div class="group-header">
                   <span class="group-name">{{ group.name }}</span>
+                  <span v-if="group.name !== '宏观指数'" class="date-marker-legends">
+                    <span v-for="marker in dateMarkerDefs" :key="marker.key" class="clear-marker-legend">
+                      <i :style="{ background: marker.color }">{{ marker.badge || marker.name.slice(0, 1) }}</i>{{ marker.name }}
+                    </span>
+                  </span>
                 </div>
                 <div class="charts-grid">
                   <div
@@ -146,6 +151,11 @@
                         >
                           <span>{{ chartPointTooltips[chart.key].date }}</span>
                           <strong>{{ chartPointTooltips[chart.key].value }}</strong>
+                          <em
+                            v-for="marker in chartPointTooltips[chart.key].markers"
+                            :key="marker.key"
+                            :style="{ color: marker.color }"
+                          >{{ marker.name }}</em>
                         </div>
                       </div>
                     </div>
@@ -182,8 +192,9 @@ import { useStockStore } from '@/stores/stock'
 import { useEmotionStore } from '@/stores/emotion'
 import { useReviewStore } from '@/stores/review'
 import { useLineChartStore } from '@/stores/lineChart'
+import { useIndependentLabelStore } from '@/stores/independentLabel'
 import type { LineChartDefinition, LineChartKey, MovingAverageConfig } from '@/stores/lineChart'
-import type { EmotionDaily } from '@/types'
+import type { EmotionDaily, IndependentLabel } from '@/types'
 import { buildContinuousBoardPromotionRates } from '@/composables/useEmotionMetrics'
 import {
   Chart as ChartJS,
@@ -222,6 +233,8 @@ const stockStore = useStockStore()
 const emotionStore = useEmotionStore()
 const reviewStore = useReviewStore()
 const chartStore = useLineChartStore()
+const labelStore = useIndependentLabelStore()
+const dateMarkerDefs = computed(() => labelStore.sortedLabels.filter(label => label.category === 'stairDate'))
 
 // ===== 模块拖拽排序 =====
 interface DashboardModule {
@@ -344,7 +357,7 @@ function applyCustomRange() {
 // 图表refs存储
 const chartScrollRefs = ref<Record<string, HTMLElement | null>>({})
 const chartInstances = ref<Record<string, any>>({})
-const chartPointTooltips = ref<Record<string, { x: number; y: number; date: string; value: string; below: boolean }>>({})
+const chartPointTooltips = ref<Record<string, { x: number; y: number; date: string; value: string; below: boolean; markers: IndependentLabel[] }>>({})
 let chartRenderVersion = 0
 
 function setChartScrollRef(key: string, el: any) {
@@ -537,6 +550,52 @@ function createAverageDatasets(config: LineChartDefinition, emotions: EmotionDai
   }))
 }
 
+function showsDateMarkers(config: LineChartDefinition) {
+  return config.group === '涨跌概况' || config.group === '连板情绪'
+}
+
+function emotionDateTagKeys(emotion: EmotionDaily) {
+  const keys = new Set(emotion.stairDateTags || [])
+  if (emotion.isClear) keys.add('isClear')
+  if (emotion.isLeaderBreak) keys.add('isLeaderBreak')
+  return [...keys]
+}
+
+function getEmotionDateMarkers(emotion: EmotionDaily) {
+  const keys = emotionDateTagKeys(emotion)
+  return dateMarkerDefs.value.filter(marker => keys.includes(marker.key))
+}
+
+function primaryDateMarker(config: LineChartDefinition, emotion: EmotionDaily) {
+  return showsDateMarkers(config) ? getEmotionDateMarkers(emotion)[0] : undefined
+}
+
+function createDateMarkerPlugin(config: LineChartDefinition, emotions: EmotionDaily[]) {
+  return {
+    id: `date-marker-${config.key}`,
+    afterDatasetsDraw(chart: any) {
+      if (!showsDateMarkers(config)) return
+      const points = chart.getDatasetMeta(0)?.data || []
+      const ctx = chart.ctx as CanvasRenderingContext2D
+      ctx.save()
+      ctx.font = '700 10px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'bottom'
+      emotions.forEach((emotion, index) => {
+        const markers = getEmotionDateMarkers(emotion)
+        if (!markers.length || !points[index]) return
+        const point = points[index]
+        markers.forEach((marker, markerIndex) => {
+          const offset = (markerIndex - (markers.length - 1) / 2) * 13
+          ctx.fillStyle = marker.color
+          ctx.fillText(marker.badge || marker.name.slice(0, 1), point.x + offset, Math.max(12, point.y - 8))
+        })
+      })
+      ctx.restore()
+    }
+  }
+}
+
 function formatChartValue(key: string, value: number): string {
   if (['sh', 'sz', 'cyb', 'allA'].includes(key)) return value.toFixed(2) + ' 点'
   if (key === 'sealRate' || key === 'promotionRate') return value.toFixed(2) + '%'
@@ -588,7 +647,8 @@ function showPointTooltip(key: LineChartKey, event: PointerEvent) {
       y: point.y,
       date: emotion.date,
       value: formatChartValue(key, values[nearestIndex] || 0),
-      below: point.y < 55
+      below: point.y < 55,
+      markers: getEmotionDateMarkers(emotion)
     }
   }
 }
@@ -626,11 +686,14 @@ function createChart(canvas: HTMLCanvasElement, config: LineChartDefinition) {
           tension: 0.4,
           pointRadius: emotions.map(e => {
             // 以第一个天梯图的标签为准
+            if (primaryDateMarker(config, e)) return 7
             if (hasIcePointInChart1(e) || hasBreakthroughInChart1(e)) return 6
             return 3
           }),
           pointBackgroundColor: emotions.map(e => {
             // 以第一个天梯图的标签为准
+            const dateMarker = primaryDateMarker(config, e)
+            if (dateMarker) return dateMarker.color
             if (hasIcePointInChart1(e)) return '#58a6ff'
             if (hasBreakthroughInChart1(e)) return '#f85149'
             return config.color
@@ -669,7 +732,8 @@ function createChart(canvas: HTMLCanvasElement, config: LineChartDefinition) {
             }
           }
         }
-      }
+      },
+      plugins: [createDateMarkerPlugin(config, emotions)]
     })
   }
 
@@ -685,8 +749,8 @@ function createChart(canvas: HTMLCanvasElement, config: LineChartDefinition) {
         borderWidth: 2.5,
         fill: config.fill,
         tension: 0.4,
-        pointRadius: 3,
-        pointBackgroundColor: config.color,
+        pointRadius: emotions.map(e => primaryDateMarker(config, e) ? 7 : 3),
+        pointBackgroundColor: emotions.map(e => primaryDateMarker(config, e)?.color || config.color),
         pointBorderColor: 'rgba(22,27,34,0.8)',
         pointBorderWidth: 1.5,
         pointHoverRadius: 6,
@@ -708,7 +772,8 @@ function createChart(canvas: HTMLCanvasElement, config: LineChartDefinition) {
           }
         }
       }
-    }
+    },
+    plugins: [createDateMarkerPlugin(config, emotions)]
   })
 }
 
@@ -778,7 +843,7 @@ watch(() => chartStore.preferences, async () => {
 // 监听天梯图标签更新（以第一个天梯图为准）
 function onStairChartTagsUpdated(e: Event) {
   const detail = (e as CustomEvent).detail
-  if (detail?.chartId === 'stairChart1') {
+  if (detail?.chartId === 'stairChart1' || detail?.dateTags) {
     destroyAllCharts()
     nextTick(() => renderAllCharts())
   }
@@ -1155,6 +1220,35 @@ watch(() => emotionStore.sortedEmotions.length, async () => {
   border-bottom: 1px solid var(--border-color);
 }
 
+.date-marker-legends {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.clear-marker-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.clear-marker-legend i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: #fff;
+  background: var(--color-orange);
+  border-radius: 50%;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 700;
+}
+
 .group-name {
   font-size: 14px;
   font-weight: 600;
@@ -1301,6 +1395,14 @@ watch(() => emotionStore.sortedEmotions.length, async () => {
 .chart-point-tooltip strong {
   color: var(--color-blue);
   font-size: 12px;
+}
+
+.chart-point-tooltip em {
+  margin-top: 2px;
+  color: var(--color-orange);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 600;
 }
 
 .chart-scroll.expanded {
