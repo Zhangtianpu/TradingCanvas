@@ -1956,9 +1956,18 @@ function deleteEdit() {
   transition: background 0.2s, color 0.2s;
   position: relative;
   height: 38px;
-  line-height: 38px;
+  line-height: 36px;
   padding: 0;
   box-sizing: border-box;
+  overflow: hidden;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.date-header.has-date-tag {
+  padding-top: 3px;
+  line-height: 15px;
+  vertical-align: top;
 }
 
 .date-header:hover {
@@ -1972,11 +1981,20 @@ function deleteEdit() {
 }
 
 .date-badges {
-  display: inline-flex;
+  position: absolute;
+  right: 2px;
+  bottom: 3px;
+  left: 2px;
+  display: flex;
+  justify-content: center;
   gap: 2px;
-  margin-left: 2px;
-  vertical-align: middle;
+  margin: 0;
+  overflow: hidden;
+  line-height: 1;
+  pointer-events: none;
 }
+
+.date-badges:empty { display: none; }
 
 .date-tag-badge,
 .date-legend-badge {
@@ -1987,6 +2005,8 @@ function deleteEdit() {
   border-radius: 3px;
   font-weight: 500;
   vertical-align: middle;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .date-legend-badge { margin-right: 2px; }
