@@ -161,8 +161,9 @@
                     v-for="(e, idx) in displayEmotions"
                     :key="e.id"
                     class="cell"
-                    :class="getCellClass(e, h, idx)"
-                    :title="e.remark || ''"
+                    :class="[getCellClass(e, h, idx), { 'is-editable': !readOnly }]"
+                    :title="readOnly ? (e.remark || '') : (e.remark || '点击录入该网格数据')"
+                    @click="!readOnly && handleCellClick(e, h)"
                   >
                     <template v-if="hasStockAtHeight(e, h)">
                       <div class="cell-content">
@@ -204,13 +205,17 @@
                           >{{ tag.badge || tag.name.slice(0, 1) }}</span>
                         </div>
                       </div>
-                      <span class="edit-hint" @click.stop="handleCellClick(e, h)">✎</span>
+                      <span v-if="!readOnly" class="edit-hint" @click.stop="handleCellClick(e, h)">✎</span>
                     </template>
                     <template v-else-if="h <= e.maxBoardHeight">
-                      <span class="fill-dot" @click.stop="handleCellClick(e, h)"></span>
+                      <span class="fill-dot" @click.stop="!readOnly && handleCellClick(e, h)"></span>
                     </template>
-                    <template v-else-if="h === e.maxBoardHeight + 1">
-                      <span class="add-hint" @click.stop="handleCellClick(e, h)">+</span>
+                    <template v-else-if="!readOnly">
+                      <span
+                        class="add-hint"
+                        :class="{ visible: h === e.maxBoardHeight + 1 }"
+                        @click.stop="handleCellClick(e, h)"
+                      >+</span>
                     </template>
                   </td>
                 </tr>
@@ -2063,6 +2068,14 @@ function deleteEdit() {
   position: relative;
 }
 
+.cell.is-editable {
+  cursor: pointer;
+}
+
+.cell.is-editable:hover {
+  box-shadow: inset 0 0 0 1px rgba(88, 166, 255, 0.4);
+}
+
 .cell-content {
   display: flex;
   flex-direction: column;
@@ -2343,6 +2356,13 @@ function deleteEdit() {
   border-radius: 50%;
   cursor: pointer;
   font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.18s, background 0.18s, color 0.18s;
+}
+
+.add-hint.visible,
+.cell:hover .add-hint {
+  opacity: 1;
 }
 
 .add-hint:hover {
