@@ -326,6 +326,76 @@
       </div>
     </section>
 
+    <!-- 题材梯队热力概览：与天梯图和抱团标的共用日期轴 -->
+    <section v-if="displayEmotions.length > 0" class="theme-ladder-section">
+      <div class="theme-ladder-header">
+        <div class="theme-ladder-heading">
+          <strong>题材梯队概览</strong>
+          <small>梯队结构 · 核心标的 · 唯一性</small>
+          <span class="theme-legend strong">强势</span>
+          <span class="theme-legend warm">较强</span>
+          <span class="theme-legend diverge">分歧</span>
+          <span class="theme-legend weak">较弱</span>
+        </div>
+        <form v-if="!readOnly" class="theme-add-form" @submit.prevent="addThemeLadderTopic">
+          <input v-model.trim="newThemeTopicName" maxlength="30" placeholder="输入题材名称" />
+          <button type="submit" class="btn-primary">+ 添加题材</button>
+        </form>
+      </div>
+
+      <div v-if="themeLadderStore.topics.length" class="theme-ladder-matrix">
+        <div class="theme-topic-column">
+          <div class="theme-topic-corner">题材 / 日期</div>
+          <div v-for="(topic, topicIndex) in themeLadderStore.topics" :key="topic.id" class="theme-topic-name">
+            <strong :title="topic.name">{{ topic.name }}</strong>
+            <div v-if="!readOnly" class="theme-topic-controls">
+              <button type="button" title="上移" :disabled="topicIndex === 0" @click="themeLadderStore.moveTopic(topic.id, 'up')">↑</button>
+              <button type="button" title="下移" :disabled="topicIndex === themeLadderStore.topics.length - 1" @click="themeLadderStore.moveTopic(topic.id, 'down')">↓</button>
+              <button type="button" class="danger" title="删除题材" @click="removeThemeLadderTopic(topic)">×</button>
+            </div>
+          </div>
+        </div>
+
+        <div ref="themeScrollRef" class="theme-ladder-scroll" @scroll="onThemeScroll">
+          <div class="theme-ladder-grid" :style="{ width: displayEmotions.length * cellWidth + 'px' }">
+            <div class="theme-ladder-date-row">
+              <div v-for="e in displayEmotions" :key="`theme-date-${e.id}`" class="theme-ladder-date" :style="{ width: cellWidth + 'px' }">
+                {{ e.date.slice(5) }}
+              </div>
+            </div>
+            <div v-for="topic in themeLadderStore.topics" :key="topic.id" class="theme-ladder-topic-row">
+              <button
+                v-for="e in displayEmotions"
+                :key="`${topic.id}-${e.date}`"
+                type="button"
+                class="theme-heat-cell"
+                :class="getThemeHeatClass(topic, e.date)"
+                :style="{ width: cellWidth + 'px' }"
+                :disabled="readOnly"
+                :title="getThemeCellTitle(topic, e.date)"
+                @click="openThemeEntry(topic, e.date)"
+              >
+                <template v-if="topic.entries[e.date]">
+                  <b class="theme-ladder-shape">{{ getThemeLadderShape(topic, e.date) }}</b>
+                  <span class="theme-core-name">{{ getThemeCoreStock(topic, e.date)?.name || '暂无核心' }}</span>
+                  <span class="theme-core-tags">
+                    <i v-if="getThemeCoreStock(topic, e.date)?.isUnique" class="unique">唯</i>
+                    <i v-if="getThemeCoreStock(topic, e.date)?.role === 'leader'" class="leader">题龙</i>
+                    <i v-if="getThemeCoreStock(topic, e.date)?.role === 'branchLeader'" class="branch">支龙</i>
+                    <em v-if="getThemeHiddenCount(topic, e.date) > 0">+{{ getThemeHiddenCount(topic, e.date) }}</em>
+                  </span>
+                </template>
+                <span v-else class="theme-empty-cell">{{ readOnly ? '—' : '+' }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div v-else class="cluster-empty">
+        {{ readOnly ? '暂无题材梯队记录' : '添加题材后，点击日期单元格录入每日连板梯队。' }}
+      </div>
+    </section>
+
     <!-- 日期节点标签弹窗 -->
     <div v-if="editingDate" class="edit-modal" @click.self="closeDateEdit">
       <div class="edit-dialog date-tag-dialog">
@@ -437,20 +507,75 @@
         </div>
       </div>
     </div>
+
+    <!-- 题材梯队每日详情编辑 -->
+    <div v-if="editingThemeCell" class="edit-modal" @click.self="closeThemeEntry">
+      <div class="edit-dialog theme-entry-dialog">
+        <div class="edit-header">
+          <span>{{ editingThemeCell.topicName }} · {{ editingThemeCell.date }} · 连板梯队</span>
+          <button class="btn-close" @click="closeThemeEntry">×</button>
+        </div>
+        <div class="edit-body theme-entry-body">
+          <div class="theme-meta-grid">
+            <div class="edit-row">
+              <label>板块涨停家数</label>
+              <input v-model="themeEntryForm.limitUpCount" type="number" min="0" placeholder="可选" />
+            </div>
+            <div class="edit-row">
+              <label>全市场排名</label>
+              <input v-model="themeEntryForm.marketRank" type="number" min="1" placeholder="可选" />
+            </div>
+          </div>
+
+          <div class="theme-stock-heading">
+            <div><strong>梯队标的</strong><small>按板高自动排序，最高身位和关键标签会显示在概览中。</small></div>
+            <button type="button" @click="addThemeStockRow">+ 添加标的</button>
+          </div>
+          <div v-if="themeEntryForm.stocks.length" class="theme-stock-list">
+            <div v-for="(stock, stockIndex) in themeEntryForm.stocks" :key="stock.id" class="theme-stock-editor-row">
+              <input v-model.trim="stock.name" class="theme-stock-name-input" placeholder="股票名称" maxlength="30" />
+              <label class="height-field"><span>板高</span><input v-model.number="stock.height" type="number" min="1" max="30" /></label>
+              <select v-model="stock.role" title="标的角色">
+                <option value="normal">普通标的</option>
+                <option value="leader">题材龙头</option>
+                <option value="branchLeader">分支龙头</option>
+              </select>
+              <input v-if="stock.role === 'branchLeader'" v-model.trim="stock.branch" class="theme-branch-input" placeholder="分支名称" maxlength="30" />
+              <span v-else class="theme-branch-placeholder">—</span>
+              <label class="unique-check"><input v-model="stock.isUnique" type="checkbox" />同梯队唯一</label>
+              <button type="button" class="remove-stock-button" title="删除" @click="removeThemeStockRow(stockIndex)">×</button>
+            </div>
+          </div>
+          <div v-else class="theme-stock-empty">尚未添加梯队标的</div>
+
+          <div class="edit-row theme-note-row">
+            <label>题材备注</label>
+            <textarea v-model="themeEntryForm.note" rows="2" placeholder="梯队完整度、强弱变化、断层等"></textarea>
+          </div>
+        </div>
+        <div class="edit-footer">
+          <button class="btn-danger" @click="clearThemeEntry">清空当天</button>
+          <button class="btn-secondary" @click="closeThemeEntry">取消</button>
+          <button class="btn-primary" @click="saveThemeEntry">保存梯队</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import type { EmotionClusterTarget, EmotionDaily, SpaceBoardStock } from '@/types'
+import type { EmotionClusterTarget, EmotionDaily, SpaceBoardStock, ThemeLadderStock, ThemeLadderTopic } from '@/types'
 import { useEmotionStore } from '@/stores/emotion'
 import { useStockStore } from '@/stores/stock'
 import { useReviewStore } from '@/stores/review'
 import { useIndependentLabelStore } from '@/stores/independentLabel'
 import { useEmotionClusterStore } from '@/stores/emotionCluster'
 import { useEmotionAnchorStore } from '@/stores/emotionAnchor'
+import { useThemeLadderStore } from '@/stores/themeLadder'
 import { buildContinuousBoardPromotionRates } from '@/composables/useEmotionMetrics'
+import { generateId } from '@/composables/useStorage'
 
 const props = defineProps<{
   emotions: EmotionDaily[]
@@ -515,6 +640,7 @@ const reviewStore = useReviewStore()
 const labelStore = useIndependentLabelStore()
 const clusterStore = useEmotionClusterStore()
 const anchorStore = useEmotionAnchorStore()
+const themeLadderStore = useThemeLadderStore()
 const stairTagDefs = computed(() => labelStore.sortedLabels.filter(l => l.category === 'stair'))
 const stairDateTagDefs = computed(() => labelStore.sortedLabels.filter(l => l.category === 'stairDate'))
 const promotionRates = computed(() => buildContinuousBoardPromotionRates(props.emotions))
@@ -807,6 +933,146 @@ function getClusterCellTitle(target: EmotionClusterTarget, date: string) {
     .join(' · ')
 }
 
+// ===== 题材梯队热力概览 =====
+const newThemeTopicName = ref('')
+const editingThemeCell = ref<{ topicId: string; topicName: string; date: string } | null>(null)
+const themeEntryForm = ref<{
+  stocks: ThemeLadderStock[]
+  limitUpCount: string | number
+  marketRank: string | number
+  note: string
+}>({ stocks: [], limitUpCount: '', marketRank: '', note: '' })
+
+function addThemeLadderTopic() {
+  const name = newThemeTopicName.value.trim()
+  if (!name) return
+  if (themeLadderStore.topics.some(topic => topic.name === name)) {
+    window.alert('该题材已经存在。')
+    return
+  }
+  themeLadderStore.addTopic(name)
+  newThemeTopicName.value = ''
+}
+
+function removeThemeLadderTopic(topic: ThemeLadderTopic) {
+  if (!window.confirm(`确定删除题材“${topic.name}”及其全部梯队记录吗？`)) return
+  themeLadderStore.deleteTopic(topic.id)
+}
+
+function openThemeEntry(topic: ThemeLadderTopic, date: string) {
+  if (props.readOnly) return
+  const entry = topic.entries[date]
+  editingThemeCell.value = { topicId: topic.id, topicName: topic.name, date }
+  themeEntryForm.value = {
+    stocks: (entry?.stocks || []).map(stock => ({ ...stock })),
+    limitUpCount: entry?.limitUpCount ?? '',
+    marketRank: entry?.marketRank ?? '',
+    note: entry?.note || ''
+  }
+  if (!entry?.stocks.length) addThemeStockRow()
+}
+
+function closeThemeEntry() {
+  editingThemeCell.value = null
+  themeEntryForm.value = { stocks: [], limitUpCount: '', marketRank: '', note: '' }
+}
+
+function addThemeStockRow() {
+  themeEntryForm.value.stocks.push({
+    id: generateId(),
+    name: '',
+    height: 1,
+    role: 'normal',
+    branch: '',
+    isUnique: false
+  })
+}
+
+function removeThemeStockRow(index: number) {
+  themeEntryForm.value.stocks.splice(index, 1)
+}
+
+function optionalPositiveNumber(value: string | number) {
+  const normalized = String(value ?? '').trim()
+  if (!normalized) return undefined
+  const parsed = Number(normalized)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined
+}
+
+function saveThemeEntry() {
+  if (!editingThemeCell.value) return
+  const stocks = themeEntryForm.value.stocks
+    .filter(stock => stock.name.trim() && Number(stock.height) >= 1)
+    .map(stock => ({
+      ...stock,
+      name: stock.name.trim(),
+      height: Math.floor(Number(stock.height)),
+      branch: stock.role === 'branchLeader' ? stock.branch?.trim() : undefined
+    }))
+  const limitUpCount = optionalPositiveNumber(themeEntryForm.value.limitUpCount)
+  const marketRank = optionalPositiveNumber(themeEntryForm.value.marketRank)
+  const note = themeEntryForm.value.note.trim()
+  if (!stocks.length && limitUpCount === undefined && marketRank === undefined && !note) {
+    themeLadderStore.clearEntry(editingThemeCell.value.topicId, editingThemeCell.value.date)
+  } else {
+    themeLadderStore.saveEntry(editingThemeCell.value.topicId, editingThemeCell.value.date, {
+      stocks,
+      limitUpCount,
+      marketRank,
+      note
+    })
+  }
+  closeThemeEntry()
+}
+
+function clearThemeEntry() {
+  if (!editingThemeCell.value) return
+  themeLadderStore.clearEntry(editingThemeCell.value.topicId, editingThemeCell.value.date)
+  closeThemeEntry()
+}
+
+function getThemeStocks(topic: ThemeLadderTopic, date: string) {
+  return themeLadderStore.sortedStocks(topic.entries[date])
+}
+
+function getThemeCoreStock(topic: ThemeLadderTopic, date: string) {
+  const stocks = getThemeStocks(topic, date)
+  return stocks.find(stock => stock.role === 'leader') || stocks.find(stock => stock.isUnique) || stocks[0]
+}
+
+function getThemeLadderShape(topic: ThemeLadderTopic, date: string) {
+  const heights = [...new Set(getThemeStocks(topic, date).map(stock => stock.height))].sort((a, b) => b - a)
+  return heights.length ? heights.join('-') : '—'
+}
+
+function getThemeHiddenCount(topic: ThemeLadderTopic, date: string) {
+  return Math.max(0, getThemeStocks(topic, date).length - 1)
+}
+
+function getThemeStrength(topic: ThemeLadderTopic, date: string) {
+  const heights = [...new Set(getThemeStocks(topic, date).map(stock => stock.height))].sort((a, b) => b - a)
+  if (!heights.length) return 'empty'
+  const consecutive = heights.every((height, index) => index === 0 || heights[index - 1] - height === 1)
+  if (heights.length >= 3 && consecutive) return 'strong'
+  if (heights.length >= 2 && heights[0] >= 3) return 'warm'
+  if (heights.length >= 2) return 'diverge'
+  return 'weak'
+}
+
+function getThemeHeatClass(topic: ThemeLadderTopic, date: string) {
+  return [getThemeStrength(topic, date), { 'has-entry': !!topic.entries[date] }]
+}
+
+function getThemeCellTitle(topic: ThemeLadderTopic, date: string) {
+  const entry = topic.entries[date]
+  if (!entry) return props.readOnly ? '暂无梯队记录' : '点击录入当天题材梯队'
+  const stocks = getThemeStocks(topic, date).map(stock => {
+    const tags = [stock.isUnique ? '唯一' : '', stock.role === 'leader' ? '题材龙头' : '', stock.role === 'branchLeader' ? `分支龙头${stock.branch ? `·${stock.branch}` : ''}` : ''].filter(Boolean)
+    return `${stock.height}板 ${stock.name}${tags.length ? `（${tags.join('、')}）` : ''}`
+  })
+  return [stocks.join('；'), entry.note].filter(Boolean).join(' · ') || '暂无梯队标的'
+}
+
 // 连板楼梯图独立的显示范围控制
 const timeRanges = [
   { label: '10天', value: 10 },
@@ -836,6 +1102,7 @@ function applyCustomStairRange() {
 // 拖拽滚动条
 const scrollContainerRef = ref<HTMLElement | null>(null)
 const clusterScrollRef = ref<HTMLElement | null>(null)
+const themeScrollRef = ref<HTMLElement | null>(null)
 const scrollbarRef = ref<HTMLElement | null>(null)
 const thumbWidth = ref(100)
 const thumbLeft = ref(0)
@@ -867,8 +1134,12 @@ function updateScrollbar() {
 function onScroll() {
   const main = scrollContainerRef.value
   const cluster = clusterScrollRef.value
+  const theme = themeScrollRef.value
   if (main && cluster && Math.abs(cluster.scrollLeft - main.scrollLeft) > 0.5) {
     cluster.scrollLeft = main.scrollLeft
+  }
+  if (main && theme && Math.abs(theme.scrollLeft - main.scrollLeft) > 0.5) {
+    theme.scrollLeft = main.scrollLeft
   }
   // 拖动时也需要更新 thumb 位置（提供视觉反馈）
   updateScrollbar()
@@ -877,8 +1148,24 @@ function onScroll() {
 function onClusterScroll() {
   const main = scrollContainerRef.value
   const cluster = clusterScrollRef.value
+  const theme = themeScrollRef.value
   if (main && cluster && Math.abs(main.scrollLeft - cluster.scrollLeft) > 0.5) {
     main.scrollLeft = cluster.scrollLeft
+  }
+  if (cluster && theme && Math.abs(theme.scrollLeft - cluster.scrollLeft) > 0.5) {
+    theme.scrollLeft = cluster.scrollLeft
+  }
+}
+
+function onThemeScroll() {
+  const main = scrollContainerRef.value
+  const cluster = clusterScrollRef.value
+  const theme = themeScrollRef.value
+  if (main && theme && Math.abs(main.scrollLeft - theme.scrollLeft) > 0.5) {
+    main.scrollLeft = theme.scrollLeft
+  }
+  if (cluster && theme && Math.abs(cluster.scrollLeft - theme.scrollLeft) > 0.5) {
+    cluster.scrollLeft = theme.scrollLeft
   }
 }
 
@@ -944,6 +1231,9 @@ onMounted(() => {
     if (scrollContainerRef.value && clusterScrollRef.value) {
       clusterScrollRef.value.scrollLeft = scrollContainerRef.value.scrollLeft
     }
+    if (scrollContainerRef.value && themeScrollRef.value) {
+      themeScrollRef.value.scrollLeft = scrollContainerRef.value.scrollLeft
+    }
     nextTick(updateScrollbar)
   })
   window.addEventListener('resize', updateScrollbar)
@@ -968,6 +1258,9 @@ watch(() => displayEmotions.value, () => {
     updateScrollbar()
     if (scrollContainerRef.value && clusterScrollRef.value) {
       clusterScrollRef.value.scrollLeft = scrollContainerRef.value.scrollLeft
+    }
+    if (scrollContainerRef.value && themeScrollRef.value) {
+      themeScrollRef.value.scrollLeft = scrollContainerRef.value.scrollLeft
     }
     nextTick(updateScrollbar)
   })
@@ -1029,11 +1322,10 @@ function removeHeightLevel() {
 // 动态计算单元格宽度
 const cellWidth = computed(() => {
   const count = displayEmotions.value.length
-  if (count <= 7) return 90
-  if (count <= 10) return 80
-  if (count <= 15) return 70
-  if (count <= 20) return 60
-  return 55
+  if (count <= 7) return 110
+  if (count <= 10) return 100
+  if (count <= 15) return 92
+  return 84
 })
 
 // 是否有现有股票
@@ -1926,6 +2218,410 @@ function deleteEdit() {
   width: 360px;
 }
 
+/* 题材梯队热力概览 */
+.theme-ladder-section {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.theme-ladder-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.theme-ladder-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.theme-ladder-heading strong {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.theme-ladder-heading small {
+  margin-right: 3px;
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.theme-legend {
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 9px;
+  line-height: 1.3;
+}
+
+.theme-legend.strong { color: #ff7b72; background: rgba(248, 81, 73, .13); border-color: rgba(248, 81, 73, .25); }
+.theme-legend.warm { color: #e3b341; background: rgba(227, 179, 65, .12); border-color: rgba(227, 179, 65, .24); }
+.theme-legend.diverge { color: #79c0ff; background: rgba(88, 166, 255, .12); border-color: rgba(88, 166, 255, .24); }
+.theme-legend.weak { color: #8b949e; background: rgba(139, 148, 158, .1); border-color: rgba(139, 148, 158, .2); }
+
+.theme-add-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.theme-add-form input {
+  width: 150px;
+  padding: 6px 9px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.theme-add-form input:focus {
+  outline: none;
+  border-color: var(--color-blue);
+}
+
+.theme-add-form button {
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.theme-ladder-matrix {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.theme-topic-column {
+  width: var(--stair-axis-width);
+  flex: 0 0 var(--stair-axis-width);
+}
+
+.theme-topic-corner,
+.theme-ladder-date {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.theme-topic-name {
+  position: relative;
+  height: 74px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 5px 22px;
+  box-sizing: border-box;
+  background: rgba(163, 113, 247, .07);
+  border: 1px solid var(--border-color);
+  border-top: 0;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.theme-topic-name strong {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.theme-topic-controls {
+  position: absolute;
+  right: 4px;
+  bottom: 3px;
+  display: flex;
+  gap: 3px;
+}
+
+.theme-topic-controls button {
+  width: 16px;
+  height: 15px;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
+  font-size: 10px;
+  line-height: 12px;
+}
+
+.theme-topic-controls button:not(:disabled):hover {
+  border-color: var(--color-blue);
+  color: var(--color-blue);
+}
+
+.theme-topic-controls button:disabled {
+  cursor: default;
+  opacity: .3;
+}
+
+.theme-topic-controls .danger:not(:disabled):hover {
+  background: rgba(248, 81, 73, .16);
+  border-color: rgba(248, 81, 73, .55);
+  color: #f85149;
+}
+
+.theme-ladder-scroll {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.theme-ladder-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.theme-ladder-date-row,
+.theme-ladder-topic-row {
+  display: flex;
+}
+
+.theme-ladder-date {
+  flex: 0 0 auto;
+  border-left: 0;
+}
+
+.theme-ladder-date:first-child {
+  border-left: 1px solid var(--border-color);
+}
+
+.theme-heat-cell {
+  height: 74px;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  box-sizing: border-box;
+  padding: 5px 4px;
+  overflow: hidden;
+  background: var(--bg-primary);
+  border: 0;
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.theme-heat-cell:first-child {
+  border-left: 1px solid var(--border-color);
+}
+
+.theme-heat-cell:not(:disabled):hover {
+  filter: brightness(1.12);
+  box-shadow: inset 0 0 0 1px rgba(88, 166, 255, .55);
+}
+
+.theme-heat-cell:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.theme-heat-cell.strong { background: linear-gradient(135deg, rgba(248, 81, 73, .26), rgba(248, 81, 73, .1)); }
+.theme-heat-cell.warm { background: linear-gradient(135deg, rgba(227, 179, 65, .22), rgba(227, 179, 65, .08)); }
+.theme-heat-cell.diverge { background: linear-gradient(135deg, rgba(88, 166, 255, .2), rgba(88, 166, 255, .06)); }
+.theme-heat-cell.weak { background: rgba(139, 148, 158, .08); }
+
+.theme-ladder-shape {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.theme-core-name {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.theme-core-tags {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 15px;
+}
+
+.theme-core-tags i,
+.theme-core-tags em {
+  padding: 1px 3px;
+  border-radius: 3px;
+  color: #fff;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.theme-core-tags .unique { background: #d29922; }
+.theme-core-tags .leader { background: #da3633; }
+.theme-core-tags .branch { background: #8957e5; }
+.theme-core-tags em { background: rgba(110, 118, 129, .65); color: var(--text-primary); }
+
+.theme-empty-cell {
+  color: var(--text-tertiary);
+  font-size: 15px;
+}
+
+.theme-entry-dialog {
+  width: min(860px, calc(100vw - 32px));
+}
+
+.theme-entry-body {
+  max-height: 68vh;
+}
+
+.theme-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.theme-stock-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 2px 0 8px;
+}
+
+.theme-stock-heading > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.theme-stock-heading strong {
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.theme-stock-heading small {
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.theme-stock-heading button {
+  flex-shrink: 0;
+  padding: 5px 9px;
+  border: 1px solid rgba(88, 166, 255, .35);
+  border-radius: 4px;
+  background: rgba(88, 166, 255, .12);
+  color: var(--color-blue);
+  font-size: 11px;
+}
+
+.theme-stock-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.theme-stock-editor-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.2fr) 92px 115px minmax(100px, 1fr) 102px 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 7px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background: rgba(110, 118, 129, .05);
+}
+
+.theme-stock-editor-row > input,
+.theme-stock-editor-row > select,
+.height-field input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.height-field {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.theme-branch-placeholder {
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+.unique-check {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.unique-check input {
+  margin: 0;
+}
+
+.remove-stock-button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 4px;
+  background: rgba(248, 81, 73, .12);
+  color: #f85149;
+  font-size: 14px;
+}
+
+.theme-stock-empty {
+  padding: 20px;
+  border: 1px dashed var(--border-color);
+  border-radius: 5px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  text-align: center;
+}
+
+.theme-note-row {
+  margin-top: 12px;
+}
+
 .stair-table {
   border-collapse: separate;
   border-spacing: 0;
@@ -2535,6 +3231,46 @@ function deleteEdit() {
 }
 
 @media (max-width: 768px) {
+  .theme-ladder-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .theme-add-form,
+  .theme-add-form input {
+    width: 100%;
+  }
+
+  .theme-add-form button {
+    flex-shrink: 0;
+  }
+
+  .theme-stock-heading,
+  .theme-stock-heading > div {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .theme-stock-editor-row {
+    grid-template-columns: minmax(0, 1fr) 86px 28px;
+  }
+
+  .theme-stock-name-input,
+  .theme-stock-editor-row > select,
+  .theme-branch-input,
+  .theme-branch-placeholder,
+  .unique-check {
+    grid-column: span 3;
+  }
+
+  .height-field {
+    grid-column: span 2;
+  }
+
+  .theme-meta-grid {
+    grid-template-columns: 1fr;
+  }
+
   .stair-table th,
   .stair-table td {
     height: 28px;

@@ -113,6 +113,7 @@ function createDefaultData(): AppStorage {
     emotionAnchors: [],
     emotionAnchorSettings: getDefaultEmotionAnchorSettings(),
     emotionClusters: [],
+    themeLadders: [],
     settings: getDefaultSettings(),
     appVersion: APP_VERSION,
     lastBackupDate: ''
@@ -351,6 +352,7 @@ export function generateTestData(): AppStorage {
     emotionAnchors: [],
     emotionAnchorSettings: getDefaultEmotionAnchorSettings(),
     emotionClusters: [],
+    themeLadders: [],
     settings: getDefaultSettings(),
     appVersion: APP_VERSION,
     lastBackupDate: ''
@@ -374,6 +376,7 @@ export function loadData(): AppStorage {
       patternTrades: data.patternTrades ?? [],
       emotionAnchors: data.emotionAnchors ?? [],
       emotionClusters: data.emotionClusters ?? [],
+      themeLadders: data.themeLadders ?? [],
       emotionAnchorSettings: {
         ...defaults.emotionAnchorSettings,
         ...(data.emotionAnchorSettings ?? {})

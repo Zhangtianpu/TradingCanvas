@@ -147,6 +147,35 @@ export interface EmotionClusterTarget {
   updatedAt: string
 }
 
+export type ThemeLadderStockRole = 'leader' | 'branchLeader' | 'normal'
+
+export interface ThemeLadderStock {
+  id: string
+  name: string
+  height: number
+  role: ThemeLadderStockRole
+  branch?: string
+  isUnique: boolean
+}
+
+export interface ThemeLadderEntry {
+  date: string
+  stocks: ThemeLadderStock[]
+  limitUpCount?: number
+  marketRank?: number
+  note: string
+  updatedAt: string
+}
+
+export interface ThemeLadderTopic {
+  id: string
+  name: string
+  note: string
+  entries: Record<string, ThemeLadderEntry>
+  createdAt: string
+  updatedAt: string
+}
+
 // 个股
 export interface Stock {
   id: string
@@ -372,6 +401,7 @@ export interface AppStorage {
   emotionAnchors: EmotionAnchorDaily[]
   emotionAnchorSettings: EmotionAnchorSettings
   emotionClusters: EmotionClusterTarget[]
+  themeLadders: ThemeLadderTopic[]
   settings: AppSettings
   appVersion: string
   lastBackupDate: string
