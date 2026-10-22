@@ -346,7 +346,7 @@
       <div class="theme-ladder-header">
         <div class="theme-ladder-heading">
           <strong>题材梯队记录</strong>
-          <small>{{ themeCompareMode ? '点击日期或卡片选择需要对比的交易日' : '按日期自由记录题材、梯队和核心标的' }}</small>
+          <small>{{ themeCompareMode ? '点击日期或卡片选择需要同时展示的交易日' : '按日期自由记录题材、梯队和核心标的' }}</small>
         </div>
         <div class="theme-compare-actions">
           <template v-if="themeCompareMode">
@@ -354,7 +354,7 @@
             <button type="button" class="btn-secondary" @click="clearThemeCompareDates">清空选择</button>
           </template>
           <button type="button" :class="themeCompareMode ? 'btn-primary' : 'btn-secondary'" @click="toggleThemeCompareMode">
-            {{ themeCompareMode ? '退出对比' : '题材对比' }}
+            {{ themeCompareMode ? '退出展示' : '多天题材展示' }}
           </button>
         </div>
       </div>
@@ -383,15 +383,16 @@
                   type="button"
                   class="theme-topic-card"
                   :class="{
-                    empty: !getThemeDailyContent(e.date),
+                    empty: !hasThemeDailyRecord(e.date),
                     active: !themeCompareMode && editingThemeCell?.date === e.date,
                     'compare-selected': themeCompareMode && themeCompareDates.includes(e.date)
                   }"
-                  :title="themeCompareMode ? '选择或取消此日期' : (getThemeDailyContent(e.date) || '点击记录当天全部题材梯队')"
+                  :title="themeCompareMode ? '选择或取消此日期' : (getThemeDailyContent(e.date) || getThemeDailyNote(e.date) || '点击记录当天全部题材梯队')"
                   @click="handleThemeCardClick(e.date)"
                 >
                   <span class="theme-card-topic-name">当日题材梯队</span>
                   <span class="theme-card-content">{{ getThemeDailyContent(e.date) || (readOnly ? '—' : '+ 点击记录') }}</span>
+                  <span v-if="getThemeDailyNote(e.date)" class="theme-card-note">备注：{{ getThemeDailyNote(e.date) }}</span>
                   <span v-if="themeCompareMode" class="theme-compare-check">{{ themeCompareDates.includes(e.date) ? '✓' : '+' }}</span>
                 </button>
               </div>
@@ -402,7 +403,7 @@
 
       <div v-if="themeCompareMode" class="theme-compare-panel">
         <div v-if="!selectedThemeCompareDates.length" class="theme-compare-empty">
-          请在上方点选两个或更多日期进行题材对比
+          请在上方点选需要同时展示的日期
         </div>
         <section v-for="date in selectedThemeCompareDates" v-else :key="`compare-${date}`" class="theme-compare-day">
           <div class="theme-compare-day-header">
@@ -425,6 +426,10 @@
             </article>
           </div>
           <div v-else class="theme-compare-no-data">当天暂无题材梯队记录</div>
+          <div v-if="getThemeDailyNote(date)" class="theme-daily-note compact">
+            <strong>当日备注</strong>
+            <p>{{ getThemeDailyNote(date) }}</p>
+          </div>
         </section>
       </div>
 
@@ -466,6 +471,14 @@
             </article>
           </div>
           <div v-else class="theme-horizontal-empty">当天暂无题材梯队记录</div>
+          <div v-if="themeEditing" class="theme-daily-note-editor">
+            <label for="theme-daily-note">当日备注</label>
+            <textarea id="theme-daily-note" v-model="themeNote" rows="3" placeholder="记录当天题材强弱、轮动节奏、观察重点等"></textarea>
+          </div>
+          <div v-else-if="themeNote" class="theme-daily-note">
+            <strong>当日备注</strong>
+            <p>{{ themeNote }}</p>
+          </div>
         </div>
         <div class="theme-expanded-footer">
           <template v-if="!readOnly && themeEditing">
@@ -1011,6 +1024,8 @@ const DAILY_THEME_TOPIC_NAME = '__daily_theme_ladder__'
 const editingThemeCell = ref<{ date: string } | null>(null)
 const themeEntryForm = ref({ content: '' })
 const themeOriginalContent = ref('')
+const themeNote = ref('')
+const themeOriginalNote = ref('')
 const themeEditing = ref(false)
 const themeEditBlocks = ref<Array<{ id: string; title: string; body: string }>>([])
 const themeExpandedRef = ref<HTMLElement | null>(null)
@@ -1058,10 +1073,13 @@ function setThemeEditBlocks(content: string) {
 
 function openThemeEntry(date: string) {
   const content = getThemeDailyContent(date)
+  const note = getThemeDailyNote(date)
   editingThemeCell.value = { date }
   themeEntryForm.value = { content }
   themeOriginalContent.value = content
-  themeEditing.value = !props.readOnly && !content
+  themeNote.value = note
+  themeOriginalNote.value = note
+  themeEditing.value = !props.readOnly && !content && !note
   setThemeEditBlocks(content)
   nextTick(() => themeExpandedRef.value?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))
 }
@@ -1070,6 +1088,8 @@ function closeThemeEntry() {
   editingThemeCell.value = null
   themeEntryForm.value = { content: '' }
   themeOriginalContent.value = ''
+  themeNote.value = ''
+  themeOriginalNote.value = ''
   themeEditing.value = false
   themeEditBlocks.value = []
 }
@@ -1091,7 +1111,8 @@ function removeThemeEditBlock(index: number) {
 
 function cancelThemeEdit() {
   themeEntryForm.value = { content: themeOriginalContent.value }
-  if (!themeOriginalContent.value) {
+  themeNote.value = themeOriginalNote.value
+  if (!themeOriginalContent.value && !themeOriginalNote.value) {
     closeThemeEntry()
     return
   }
@@ -1108,7 +1129,8 @@ function saveThemeEntry() {
     .sort((a, b) => getThemeLimitUpCount(b.body) - getThemeLimitUpCount(a.body))
     .map((block, index) => `${block.title || `未命名题材 ${index + 1}`}\n${block.body}`.trim())
     .join('\n\n')
-  if (!content) {
+  const note = themeNote.value.trim()
+  if (!content && !note) {
     clearThemeDateEntries(date)
     closeThemeEntry()
     return
@@ -1124,11 +1146,13 @@ function saveThemeEntry() {
     content,
     stocks: [],
     heightCounts: {},
-    note: ''
+    note
   })
   for (const topicId of oldTopicIds) removeThemeTopicIfEmpty(topicId)
   themeOriginalContent.value = content
+  themeOriginalNote.value = note
   themeEntryForm.value = { content }
+  themeNote.value = note
   setThemeEditBlocks(content)
   themeEditing.value = false
 }
@@ -1150,7 +1174,7 @@ function clearThemeDateEntries(date: string) {
   for (const topicId of topicIds) removeThemeTopicIfEmpty(topicId)
 }
 
-function getThemeEntryContent(entry?: ThemeLadderTopic['entries'][string]) {
+function getThemeEntryContent(entry?: ThemeLadderTopic['entries'][string], includeNote = true) {
   if (!entry) return ''
   if (entry.content?.trim()) return entry.content.trim()
   const lines: string[] = []
@@ -1172,13 +1196,13 @@ function getThemeEntryContent(entry?: ThemeLadderTopic['entries'][string]) {
   }
   if (entry.limitUpCount !== undefined) lines.push(`板块涨停：${entry.limitUpCount}家`)
   if (entry.marketRank !== undefined) lines.push(`全市场排名：${entry.marketRank}`)
-  if (entry.note) lines.push(entry.note)
+  if (includeNote && entry.note) lines.push(entry.note)
   return lines.join('\n')
 }
 
 function getThemeDailyContent(date: string) {
   const dailyTopic = themeLadderStore.topics.find(topic => topic.name === DAILY_THEME_TOPIC_NAME)
-  const dailyContent = getThemeEntryContent(dailyTopic?.entries[date])
+  const dailyContent = getThemeEntryContent(dailyTopic?.entries[date], false)
   if (dailyContent) return dailyContent
   return themeLadderStore.topics
     .filter(topic => topic.name !== DAILY_THEME_TOPIC_NAME && !!topic.entries[date])
@@ -1188,6 +1212,15 @@ function getThemeDailyContent(date: string) {
     })
     .filter(Boolean)
     .join('\n\n')
+}
+
+function getThemeDailyNote(date: string) {
+  const dailyTopic = themeLadderStore.topics.find(topic => topic.name === DAILY_THEME_TOPIC_NAME)
+  return dailyTopic?.entries[date]?.note?.trim() || ''
+}
+
+function hasThemeDailyRecord(date: string) {
+  return !!(getThemeDailyContent(date) || getThemeDailyNote(date))
 }
 
 function getThemeContentBlocks(content: string) {
@@ -2522,7 +2555,7 @@ function deleteEdit() {
 .theme-topic-card {
   position: relative;
   width: 100%;
-  min-height: 112px;
+  min-height: 132px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2594,6 +2627,22 @@ function deleteEdit() {
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 6;
+}
+
+.theme-card-note {
+  display: -webkit-box;
+  width: 100%;
+  margin-top: 3px;
+  padding-top: 4px;
+  overflow: hidden;
+  border-top: 1px dashed rgba(139, 148, 158, .25);
+  color: var(--text-tertiary);
+  font-size: 8px;
+  line-height: 1.35;
+  text-align: left;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .theme-add-card {
@@ -2888,6 +2937,25 @@ function deleteEdit() {
   resize: vertical;
 }
 
+.theme-daily-note-editor {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.theme-daily-note-editor label {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.theme-daily-note-editor textarea {
+  min-height: 78px;
+  resize: vertical;
+}
+
 .theme-add-card {
   min-width: 150px;
   min-height: 230px;
@@ -2962,6 +3030,35 @@ function deleteEdit() {
   min-height: 110px;
   place-items: center;
   color: var(--text-tertiary);
+}
+
+.theme-daily-note {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-left: 3px solid #d29922;
+  border-radius: 5px;
+  background: rgba(210, 153, 34, .07);
+}
+
+.theme-daily-note strong {
+  color: #e3b341;
+  font-size: 11px;
+}
+
+.theme-daily-note p {
+  margin: 5px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.theme-daily-note.compact {
+  margin: 0;
+  border-top: 1px solid var(--border-color);
+  border-left-width: 3px;
+  border-radius: 0;
 }
 
 .theme-expanded-footer {
