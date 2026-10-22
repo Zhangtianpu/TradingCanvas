@@ -43,8 +43,9 @@
         <label><span>虚拟数量 *</span><input v-model.number="form.quantity" type="number" min="1" step="1" required /></label>
         <label class="note-field"><span>验证备注</span><input v-model.trim="form.note" placeholder="记录触发条件、预期与观察点" /></label>
       </div>
-      <div class="form-actions"><button type="button" class="ghost-btn" @click="showForm = false">取消</button><button class="save-btn">保存虚拟买点</button></div>
+      <div class="form-actions"><button type="button" class="ghost-btn" @click="cancelTradeForm">取消</button><button type="submit" class="save-btn">保存虚拟买点</button></div>
     </form>
+    <p v-if="saveMessage" class="save-feedback" :class="saveMessageType">{{ saveMessage }}</p>
 
     <div v-if="selectedModeId" class="trade-list">
       <div class="list-head"><span>验证记录</span><small>统计仅基于已填写卖点的记录</small></div>
@@ -72,7 +73,7 @@
         <h3>记录虚拟卖点</h3>
         <label><span>卖出日期</span><input v-model="closeForm.sellDate" type="date" required /></label>
         <label><span>虚拟卖价</span><input v-model.number="closeForm.sellPrice" type="number" min="0.001" step="0.001" required /></label>
-        <div class="form-actions"><button type="button" class="ghost-btn" @click="closingId = null">取消</button><button class="save-btn">完成交易</button></div>
+        <div class="form-actions"><button type="button" class="ghost-btn" @click="closingId = null">取消</button><button type="submit" class="save-btn">完成交易</button></div>
       </form>
     </div>
   </section>
@@ -87,11 +88,26 @@ import type { PatternTrade } from '@/types'
 const tradeModeStore = useTradeModeStore()
 const patternStore = usePatternMiningStore()
 const selectedModeId = ref(tradeModeStore.tradeModes[0]?.id || '')
-const showForm = ref(false)
 const today = () => new Date().toISOString().slice(0, 10)
-const form = reactive({ modeId: selectedModeId.value, stockName: '', stockCode: '', buyDate: today(), buyPrice: 0, quantity: 100, note: '' })
+const PATTERN_DRAFT_KEY = 'pattern-mining-trade-draft'
+const emptyTradeForm = () => ({ modeId: selectedModeId.value, stockName: '', stockCode: '', buyDate: today(), buyPrice: 0, quantity: 100, note: '' })
+
+function loadTradeDraft() {
+  try {
+    const raw = localStorage.getItem(PATTERN_DRAFT_KEY)
+    return raw ? JSON.parse(raw) as Partial<ReturnType<typeof emptyTradeForm>> : null
+  } catch {
+    return null
+  }
+}
+
+const restoredDraft = loadTradeDraft()
+const showForm = ref(!!restoredDraft)
+const form = reactive({ ...emptyTradeForm(), ...(restoredDraft || {}) })
 const closingId = ref<string | null>(null)
 const closeForm = reactive({ sellDate: today(), sellPrice: 0 })
+const saveMessage = ref('')
+const saveMessageType = ref<'success' | 'error'>('success')
 
 const modeTrades = computed(() => patternStore.sortedTrades.filter(item => item.modeId === selectedModeId.value))
 const stats = computed(() => patternStore.statsForMode(selectedModeId.value))
@@ -102,9 +118,35 @@ watch(() => tradeModeStore.tradeModes, modes => {
   if (!modes.some(mode => mode.id === form.modeId)) form.modeId = modes[0]?.id || ''
 }, { deep: true })
 
+watch(form, value => {
+  const hasDraft = !!(value.stockName || value.stockCode || value.note || Number(value.buyPrice) > 0)
+  try {
+    if (hasDraft) localStorage.setItem(PATTERN_DRAFT_KEY, JSON.stringify(value))
+    else localStorage.removeItem(PATTERN_DRAFT_KEY)
+  } catch {
+    // 正式保存时会显示明确错误；草稿失败不阻断输入。
+  }
+}, { deep: true })
+
+function setSaveMessage(message: string, type: 'success' | 'error') {
+  saveMessage.value = message
+  saveMessageType.value = type
+}
+
+function resetTradeForm() {
+  Object.assign(form, emptyTradeForm())
+  try { localStorage.removeItem(PATTERN_DRAFT_KEY) } catch { /* ignore */ }
+}
+
+function cancelTradeForm() {
+  resetTradeForm()
+  showForm.value = false
+  saveMessage.value = ''
+}
+
 function submitTrade() {
   if (!form.modeId || !form.stockName || form.buyPrice <= 0 || form.quantity <= 0) return
-  patternStore.addTrade({
+  const saved = patternStore.addTrade({
     modeId: form.modeId,
     stockName: form.stockName,
     stockCode: form.stockCode || undefined,
@@ -113,9 +155,14 @@ function submitTrade() {
     quantity: form.quantity,
     note: form.note
   })
+  if (!saved) {
+    setSaveMessage('保存失败：浏览器本地存储不可用或空间不足，输入内容已保留。', 'error')
+    return
+  }
   selectedModeId.value = form.modeId
-  Object.assign(form, { modeId: selectedModeId.value, stockName: '', stockCode: '', buyDate: today(), buyPrice: 0, quantity: 100, note: '' })
+  resetTradeForm()
   showForm.value = false
+  setSaveMessage('虚拟买点已保存。', 'success')
 }
 
 function openClose(id: string) {
@@ -125,12 +172,19 @@ function openClose(id: string) {
 
 function submitClose() {
   if (!closingId.value || closeForm.sellPrice <= 0) return
-  patternStore.closeTrade(closingId.value, closeForm.sellDate, closeForm.sellPrice)
+  if (!patternStore.closeTrade(closingId.value, closeForm.sellDate, closeForm.sellPrice)) {
+    setSaveMessage('卖点保存失败，请检查浏览器本地存储空间。', 'error')
+    return
+  }
   closingId.value = null
+  setSaveMessage('虚拟卖点已保存。', 'success')
 }
 
 function removeTrade(id: string) {
-  if (confirm('确定删除这条虚拟交易记录？')) patternStore.deleteTrade(id)
+  if (confirm('确定删除这条虚拟交易记录？')) {
+    const deleted = patternStore.deleteTrade(id)
+    setSaveMessage(deleted ? '记录已删除。' : '删除失败，请检查浏览器本地存储空间。', deleted ? 'success' : 'error')
+  }
 }
 
 const formatPercent = (value: number) => `${value.toFixed(1)}%`
@@ -160,6 +214,9 @@ const returnClass = (value: number) => value > 0 ? 'positive' : value < 0 ? 'neg
 .positive { color: var(--color-red); }
 .negative { color: var(--color-green); }
 .trade-form { background: var(--bg-tertiary); border: 1px solid rgba(88,166,255,.35); border-radius: 8px; padding: 14px; margin-bottom: 16px; }
+.save-feedback { margin: -6px 0 14px; padding: 8px 10px; border-radius: 6px; font-size: 12px; }
+.save-feedback.success { color: var(--color-green); background: rgba(63,185,80,.1); border: 1px solid rgba(63,185,80,.25); }
+.save-feedback.error { color: var(--color-red); background: rgba(248,81,73,.1); border: 1px solid rgba(248,81,73,.25); }
 .form-grid { display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr 1fr; gap: 10px; }
 label span { display: block; color: var(--text-secondary); font-size: 11px; margin-bottom: 5px; }
 label input, label select { width: 100%; }

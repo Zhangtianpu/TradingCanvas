@@ -22,7 +22,7 @@ export const usePatternMiningStore = defineStore('patternMining', () => {
   function persist() {
     const data = loadData()
     data.patternTrades = trades.value
-    saveData(data)
+    return saveData(data)
   }
 
   const sortedTrades = computed(() => [...trades.value].sort((a, b) =>
@@ -33,22 +33,35 @@ export const usePatternMiningStore = defineStore('patternMining', () => {
     const now = new Date().toISOString()
     const trade: PatternTrade = { ...payload, id: generateId(), createdAt: now, updatedAt: now }
     trades.value.push(trade)
-    persist()
+    if (!persist()) {
+      trades.value = trades.value.filter(item => item.id !== trade.id)
+      return null
+    }
     return trade
   }
 
   function closeTrade(id: string, sellDate: string, sellPrice: number) {
     const trade = trades.value.find(item => item.id === id)
-    if (!trade) return
+    if (!trade) return false
+    const previous = { sellDate: trade.sellDate, sellPrice: trade.sellPrice, updatedAt: trade.updatedAt }
     trade.sellDate = sellDate
     trade.sellPrice = sellPrice
     trade.updatedAt = new Date().toISOString()
-    persist()
+    if (!persist()) {
+      Object.assign(trade, previous)
+      return false
+    }
+    return true
   }
 
   function deleteTrade(id: string) {
+    const previous = trades.value
     trades.value = trades.value.filter(item => item.id !== id)
-    persist()
+    if (!persist()) {
+      trades.value = previous
+      return false
+    }
+    return true
   }
 
   function returnRate(trade: PatternTrade) {

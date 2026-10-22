@@ -412,11 +412,13 @@ function mergeIndependentLabelDefaults(stored: IndependentLabel[]): IndependentL
   return merged
 }
 
-export function saveData(data: AppStorage): void {
+export function saveData(data: AppStorage): boolean {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+    return true
   } catch (e) {
     console.error('保存数据失败:', e)
+    return false
   }
 }
 

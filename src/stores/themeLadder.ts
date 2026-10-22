@@ -55,7 +55,9 @@ export const useThemeLadderStore = defineStore('themeLadder', () => {
     const now = new Date().toISOString()
     topic.entries[date] = {
       date,
+      content: payload.content?.trim(),
       stocks: payload.stocks.map(stock => ({ ...stock })),
+      heightCounts: { ...(payload.heightCounts || {}) },
       limitUpCount: payload.limitUpCount,
       marketRank: payload.marketRank,
       note: payload.note.trim(),

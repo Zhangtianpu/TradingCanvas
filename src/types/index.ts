@@ -160,7 +160,9 @@ export interface ThemeLadderStock {
 
 export interface ThemeLadderEntry {
   date: string
+  content?: string
   stocks: ThemeLadderStock[]
+  heightCounts?: Record<string, number>
   limitUpCount?: number
   marketRank?: number
   note: string

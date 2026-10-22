@@ -330,32 +330,12 @@
     <section v-if="displayEmotions.length > 0" class="theme-ladder-section">
       <div class="theme-ladder-header">
         <div class="theme-ladder-heading">
-          <strong>题材梯队概览</strong>
-          <small>梯队结构 · 核心标的 · 唯一性</small>
-          <span class="theme-legend strong">强势</span>
-          <span class="theme-legend warm">较强</span>
-          <span class="theme-legend diverge">分歧</span>
-          <span class="theme-legend weak">较弱</span>
+          <strong>题材梯队记录</strong>
+          <small>按日期自由记录题材、梯队和核心标的</small>
         </div>
-        <form v-if="!readOnly" class="theme-add-form" @submit.prevent="addThemeLadderTopic">
-          <input v-model.trim="newThemeTopicName" maxlength="30" placeholder="输入题材名称" />
-          <button type="submit" class="btn-primary">+ 添加题材</button>
-        </form>
       </div>
 
-      <div v-if="themeLadderStore.topics.length" class="theme-ladder-matrix">
-        <div class="theme-topic-column">
-          <div class="theme-topic-corner">题材 / 日期</div>
-          <div v-for="(topic, topicIndex) in themeLadderStore.topics" :key="topic.id" class="theme-topic-name">
-            <strong :title="topic.name">{{ topic.name }}</strong>
-            <div v-if="!readOnly" class="theme-topic-controls">
-              <button type="button" title="上移" :disabled="topicIndex === 0" @click="themeLadderStore.moveTopic(topic.id, 'up')">↑</button>
-              <button type="button" title="下移" :disabled="topicIndex === themeLadderStore.topics.length - 1" @click="themeLadderStore.moveTopic(topic.id, 'down')">↓</button>
-              <button type="button" class="danger" title="删除题材" @click="removeThemeLadderTopic(topic)">×</button>
-            </div>
-          </div>
-        </div>
-
+      <div class="theme-ladder-matrix">
         <div ref="themeScrollRef" class="theme-ladder-scroll" @scroll="onThemeScroll">
           <div class="theme-ladder-grid" :style="{ width: displayEmotions.length * cellWidth + 'px' }">
             <div class="theme-ladder-date-row">
@@ -363,36 +343,49 @@
                 {{ e.date.slice(5) }}
               </div>
             </div>
-            <div v-for="topic in themeLadderStore.topics" :key="topic.id" class="theme-ladder-topic-row">
-              <button
-                v-for="e in displayEmotions"
-                :key="`${topic.id}-${e.date}`"
-                type="button"
-                class="theme-heat-cell"
-                :class="getThemeHeatClass(topic, e.date)"
-                :style="{ width: cellWidth + 'px' }"
-                :disabled="readOnly"
-                :title="getThemeCellTitle(topic, e.date)"
-                @click="openThemeEntry(topic, e.date)"
-              >
-                <template v-if="topic.entries[e.date]">
-                  <b class="theme-ladder-shape">{{ getThemeLadderShape(topic, e.date) }}</b>
-                  <span class="theme-core-name">{{ getThemeCoreStock(topic, e.date)?.name || '暂无核心' }}</span>
-                  <span class="theme-core-tags">
-                    <i v-if="getThemeCoreStock(topic, e.date)?.isUnique" class="unique">唯</i>
-                    <i v-if="getThemeCoreStock(topic, e.date)?.role === 'leader'" class="leader">题龙</i>
-                    <i v-if="getThemeCoreStock(topic, e.date)?.role === 'branchLeader'" class="branch">支龙</i>
-                    <em v-if="getThemeHiddenCount(topic, e.date) > 0">+{{ getThemeHiddenCount(topic, e.date) }}</em>
-                  </span>
-                </template>
-                <span v-else class="theme-empty-cell">{{ readOnly ? '—' : '+' }}</span>
-              </button>
+            <div class="theme-ladder-card-row">
+              <div v-for="e in displayEmotions" :key="`theme-day-${e.id}`" class="theme-day-column" :style="{ width: cellWidth + 'px' }">
+                <button
+                  :key="`theme-card-${e.date}`"
+                  type="button"
+                  class="theme-topic-card"
+                  :class="{ empty: !getThemeDailyContent(e.date), active: editingThemeCell?.date === e.date }"
+                  :title="getThemeDailyContent(e.date) || '点击记录当天全部题材梯队'"
+                  @click="openThemeEntry(e.date)"
+                >
+                  <span class="theme-card-topic-name">当日题材梯队</span>
+                  <span class="theme-card-content">{{ getThemeDailyContent(e.date) || (readOnly ? '—' : '+ 点击记录') }}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
-      <div v-else class="cluster-empty">
-        {{ readOnly ? '暂无题材梯队记录' : '添加题材后，点击日期单元格录入每日连板梯队。' }}
+
+      <div v-if="editingThemeCell" ref="themeExpandedRef" class="theme-expanded-card">
+        <div class="theme-expanded-header">
+          <div>
+            <strong>{{ editingThemeCell.date }} · 当日题材梯队</strong>
+            <small>{{ readOnly ? '放大查看' : '可直接编辑当天全部内容' }}</small>
+          </div>
+          <button type="button" class="btn-close" title="收起" @click="closeThemeEntry">×</button>
+        </div>
+        <div class="theme-expanded-body">
+          <textarea
+            v-model="themeEntryForm.content"
+            :readonly="readOnly"
+            rows="12"
+            placeholder="自由填写，例如：&#10;机器人：5板A公司，3板B公司、C公司，首板12家&#10;低空经济：4板D公司（分支龙头），2板3家&#10;端侧AI：3板E公司（同梯队唯一）"
+          ></textarea>
+        </div>
+        <div class="theme-expanded-footer">
+          <template v-if="!readOnly">
+            <button class="btn-danger" @click="clearThemeEntry">清空当天</button>
+            <button class="btn-secondary" @click="closeThemeEntry">取消</button>
+            <button class="btn-primary" @click="saveThemeEntry">保存梯队</button>
+          </template>
+          <button v-else class="btn-secondary" @click="closeThemeEntry">收起</button>
+        </div>
       </div>
     </section>
 
@@ -508,65 +501,13 @@
       </div>
     </div>
 
-    <!-- 题材梯队每日详情编辑 -->
-    <div v-if="editingThemeCell" class="edit-modal" @click.self="closeThemeEntry">
-      <div class="edit-dialog theme-entry-dialog">
-        <div class="edit-header">
-          <span>{{ editingThemeCell.topicName }} · {{ editingThemeCell.date }} · 连板梯队</span>
-          <button class="btn-close" @click="closeThemeEntry">×</button>
-        </div>
-        <div class="edit-body theme-entry-body">
-          <div class="theme-meta-grid">
-            <div class="edit-row">
-              <label>板块涨停家数</label>
-              <input v-model="themeEntryForm.limitUpCount" type="number" min="0" placeholder="可选" />
-            </div>
-            <div class="edit-row">
-              <label>全市场排名</label>
-              <input v-model="themeEntryForm.marketRank" type="number" min="1" placeholder="可选" />
-            </div>
-          </div>
-
-          <div class="theme-stock-heading">
-            <div><strong>梯队标的</strong><small>按板高自动排序，最高身位和关键标签会显示在概览中。</small></div>
-            <button type="button" @click="addThemeStockRow">+ 添加标的</button>
-          </div>
-          <div v-if="themeEntryForm.stocks.length" class="theme-stock-list">
-            <div v-for="(stock, stockIndex) in themeEntryForm.stocks" :key="stock.id" class="theme-stock-editor-row">
-              <input v-model.trim="stock.name" class="theme-stock-name-input" placeholder="股票名称" maxlength="30" />
-              <label class="height-field"><span>板高</span><input v-model.number="stock.height" type="number" min="1" max="30" /></label>
-              <select v-model="stock.role" title="标的角色">
-                <option value="normal">普通标的</option>
-                <option value="leader">题材龙头</option>
-                <option value="branchLeader">分支龙头</option>
-              </select>
-              <input v-if="stock.role === 'branchLeader'" v-model.trim="stock.branch" class="theme-branch-input" placeholder="分支名称" maxlength="30" />
-              <span v-else class="theme-branch-placeholder">—</span>
-              <label class="unique-check"><input v-model="stock.isUnique" type="checkbox" />同梯队唯一</label>
-              <button type="button" class="remove-stock-button" title="删除" @click="removeThemeStockRow(stockIndex)">×</button>
-            </div>
-          </div>
-          <div v-else class="theme-stock-empty">尚未添加梯队标的</div>
-
-          <div class="edit-row theme-note-row">
-            <label>题材备注</label>
-            <textarea v-model="themeEntryForm.note" rows="2" placeholder="梯队完整度、强弱变化、断层等"></textarea>
-          </div>
-        </div>
-        <div class="edit-footer">
-          <button class="btn-danger" @click="clearThemeEntry">清空当天</button>
-          <button class="btn-secondary" @click="closeThemeEntry">取消</button>
-          <button class="btn-primary" @click="saveThemeEntry">保存梯队</button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import type { EmotionClusterTarget, EmotionDaily, SpaceBoardStock, ThemeLadderStock, ThemeLadderTopic } from '@/types'
+import type { EmotionClusterTarget, EmotionDaily, SpaceBoardStock, ThemeLadderTopic } from '@/types'
 import { useEmotionStore } from '@/stores/emotion'
 import { useStockStore } from '@/stores/stock'
 import { useReviewStore } from '@/stores/review'
@@ -575,7 +516,6 @@ import { useEmotionClusterStore } from '@/stores/emotionCluster'
 import { useEmotionAnchorStore } from '@/stores/emotionAnchor'
 import { useThemeLadderStore } from '@/stores/themeLadder'
 import { buildContinuousBoardPromotionRates } from '@/composables/useEmotionMetrics'
-import { generateId } from '@/composables/useStorage'
 
 const props = defineProps<{
   emotions: EmotionDaily[]
@@ -934,143 +874,103 @@ function getClusterCellTitle(target: EmotionClusterTarget, date: string) {
 }
 
 // ===== 题材梯队热力概览 =====
-const newThemeTopicName = ref('')
-const editingThemeCell = ref<{ topicId: string; topicName: string; date: string } | null>(null)
-const themeEntryForm = ref<{
-  stocks: ThemeLadderStock[]
-  limitUpCount: string | number
-  marketRank: string | number
-  note: string
-}>({ stocks: [], limitUpCount: '', marketRank: '', note: '' })
+const DAILY_THEME_TOPIC_NAME = '__daily_theme_ladder__'
+const editingThemeCell = ref<{ date: string } | null>(null)
+const themeEntryForm = ref({ content: '' })
+const themeExpandedRef = ref<HTMLElement | null>(null)
 
-function addThemeLadderTopic() {
-  const name = newThemeTopicName.value.trim()
-  if (!name) return
-  if (themeLadderStore.topics.some(topic => topic.name === name)) {
-    window.alert('该题材已经存在。')
-    return
-  }
-  themeLadderStore.addTopic(name)
-  newThemeTopicName.value = ''
-}
-
-function removeThemeLadderTopic(topic: ThemeLadderTopic) {
-  if (!window.confirm(`确定删除题材“${topic.name}”及其全部梯队记录吗？`)) return
-  themeLadderStore.deleteTopic(topic.id)
-}
-
-function openThemeEntry(topic: ThemeLadderTopic, date: string) {
-  if (props.readOnly) return
-  const entry = topic.entries[date]
-  editingThemeCell.value = { topicId: topic.id, topicName: topic.name, date }
-  themeEntryForm.value = {
-    stocks: (entry?.stocks || []).map(stock => ({ ...stock })),
-    limitUpCount: entry?.limitUpCount ?? '',
-    marketRank: entry?.marketRank ?? '',
-    note: entry?.note || ''
-  }
-  if (!entry?.stocks.length) addThemeStockRow()
+function openThemeEntry(date: string) {
+  editingThemeCell.value = { date }
+  themeEntryForm.value = { content: getThemeDailyContent(date) }
+  nextTick(() => themeExpandedRef.value?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))
 }
 
 function closeThemeEntry() {
   editingThemeCell.value = null
-  themeEntryForm.value = { stocks: [], limitUpCount: '', marketRank: '', note: '' }
-}
-
-function addThemeStockRow() {
-  themeEntryForm.value.stocks.push({
-    id: generateId(),
-    name: '',
-    height: 1,
-    role: 'normal',
-    branch: '',
-    isUnique: false
-  })
-}
-
-function removeThemeStockRow(index: number) {
-  themeEntryForm.value.stocks.splice(index, 1)
-}
-
-function optionalPositiveNumber(value: string | number) {
-  const normalized = String(value ?? '').trim()
-  if (!normalized) return undefined
-  const parsed = Number(normalized)
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined
+  themeEntryForm.value = { content: '' }
 }
 
 function saveThemeEntry() {
   if (!editingThemeCell.value) return
-  const stocks = themeEntryForm.value.stocks
-    .filter(stock => stock.name.trim() && Number(stock.height) >= 1)
-    .map(stock => ({
-      ...stock,
-      name: stock.name.trim(),
-      height: Math.floor(Number(stock.height)),
-      branch: stock.role === 'branchLeader' ? stock.branch?.trim() : undefined
-    }))
-  const limitUpCount = optionalPositiveNumber(themeEntryForm.value.limitUpCount)
-  const marketRank = optionalPositiveNumber(themeEntryForm.value.marketRank)
-  const note = themeEntryForm.value.note.trim()
-  if (!stocks.length && limitUpCount === undefined && marketRank === undefined && !note) {
-    themeLadderStore.clearEntry(editingThemeCell.value.topicId, editingThemeCell.value.date)
-  } else {
-    themeLadderStore.saveEntry(editingThemeCell.value.topicId, editingThemeCell.value.date, {
-      stocks,
-      limitUpCount,
-      marketRank,
-      note
-    })
+  const date = editingThemeCell.value.date
+  const content = themeEntryForm.value.content.trim()
+  if (!content) {
+    clearThemeDateEntries(date)
+    closeThemeEntry()
+    return
   }
+  let targetTopic = themeLadderStore.topics.find(topic => topic.name === DAILY_THEME_TOPIC_NAME)
+  targetTopic ||= themeLadderStore.addTopic(DAILY_THEME_TOPIC_NAME) || undefined
+  if (!targetTopic) return
+  const oldTopicIds = themeLadderStore.topics
+    .filter(topic => topic.id !== targetTopic?.id && !!topic.entries[date])
+    .map(topic => topic.id)
+  for (const topicId of oldTopicIds) themeLadderStore.clearEntry(topicId, date)
+  themeLadderStore.saveEntry(targetTopic.id, date, {
+    content,
+    stocks: [],
+    heightCounts: {},
+    note: ''
+  })
+  for (const topicId of oldTopicIds) removeThemeTopicIfEmpty(topicId)
   closeThemeEntry()
+}
+
+function removeThemeTopicIfEmpty(topicId: string) {
+  const topic = themeLadderStore.topics.find(item => item.id === topicId)
+  if (topic && Object.keys(topic.entries).length === 0) themeLadderStore.deleteTopic(topicId)
 }
 
 function clearThemeEntry() {
   if (!editingThemeCell.value) return
-  themeLadderStore.clearEntry(editingThemeCell.value.topicId, editingThemeCell.value.date)
+  clearThemeDateEntries(editingThemeCell.value.date)
   closeThemeEntry()
 }
 
-function getThemeStocks(topic: ThemeLadderTopic, date: string) {
-  return themeLadderStore.sortedStocks(topic.entries[date])
+function clearThemeDateEntries(date: string) {
+  const topicIds = themeLadderStore.topics.filter(topic => !!topic.entries[date]).map(topic => topic.id)
+  for (const topicId of topicIds) themeLadderStore.clearEntry(topicId, date)
+  for (const topicId of topicIds) removeThemeTopicIfEmpty(topicId)
 }
 
-function getThemeCoreStock(topic: ThemeLadderTopic, date: string) {
-  const stocks = getThemeStocks(topic, date)
-  return stocks.find(stock => stock.role === 'leader') || stocks.find(stock => stock.isUnique) || stocks[0]
+function getThemeEntryContent(entry?: ThemeLadderTopic['entries'][string]) {
+  if (!entry) return ''
+  if (entry.content?.trim()) return entry.content.trim()
+  const lines: string[] = []
+  const counts = { ...(entry.heightCounts || {}) }
+  for (const stock of entry.stocks || []) {
+    const key = String(stock.height)
+    const namedCount = entry.stocks.filter(item => item.height === stock.height).length
+    counts[key] = Math.max(counts[key] || 0, namedCount)
+  }
+  const ladder = Object.keys(counts)
+    .map(Number)
+    .filter(height => Number.isFinite(height) && counts[String(height)] > 0)
+    .sort((a, b) => b - a)
+    .map(height => `${height}板：${counts[String(height)]}家`)
+  if (ladder.length) lines.push(ladder.join('，'))
+  for (const stock of entry.stocks || []) {
+    const roles = [stock.role === 'leader' ? '题材龙头' : '', stock.role === 'branchLeader' ? `分支龙头${stock.branch ? `·${stock.branch}` : ''}` : '', stock.isUnique ? '同梯队唯一' : ''].filter(Boolean)
+    lines.push(`${stock.height}板：${stock.name}${roles.length ? `（${roles.join('、')}）` : ''}`)
+  }
+  if (entry.limitUpCount !== undefined) lines.push(`板块涨停：${entry.limitUpCount}家`)
+  if (entry.marketRank !== undefined) lines.push(`全市场排名：${entry.marketRank}`)
+  if (entry.note) lines.push(entry.note)
+  return lines.join('\n')
 }
 
-function getThemeLadderShape(topic: ThemeLadderTopic, date: string) {
-  const heights = [...new Set(getThemeStocks(topic, date).map(stock => stock.height))].sort((a, b) => b - a)
-  return heights.length ? heights.join('-') : '—'
-}
-
-function getThemeHiddenCount(topic: ThemeLadderTopic, date: string) {
-  return Math.max(0, getThemeStocks(topic, date).length - 1)
-}
-
-function getThemeStrength(topic: ThemeLadderTopic, date: string) {
-  const heights = [...new Set(getThemeStocks(topic, date).map(stock => stock.height))].sort((a, b) => b - a)
-  if (!heights.length) return 'empty'
-  const consecutive = heights.every((height, index) => index === 0 || heights[index - 1] - height === 1)
-  if (heights.length >= 3 && consecutive) return 'strong'
-  if (heights.length >= 2 && heights[0] >= 3) return 'warm'
-  if (heights.length >= 2) return 'diverge'
-  return 'weak'
-}
-
-function getThemeHeatClass(topic: ThemeLadderTopic, date: string) {
-  return [getThemeStrength(topic, date), { 'has-entry': !!topic.entries[date] }]
-}
-
-function getThemeCellTitle(topic: ThemeLadderTopic, date: string) {
-  const entry = topic.entries[date]
-  if (!entry) return props.readOnly ? '暂无梯队记录' : '点击录入当天题材梯队'
-  const stocks = getThemeStocks(topic, date).map(stock => {
-    const tags = [stock.isUnique ? '唯一' : '', stock.role === 'leader' ? '题材龙头' : '', stock.role === 'branchLeader' ? `分支龙头${stock.branch ? `·${stock.branch}` : ''}` : ''].filter(Boolean)
-    return `${stock.height}板 ${stock.name}${tags.length ? `（${tags.join('、')}）` : ''}`
-  })
-  return [stocks.join('；'), entry.note].filter(Boolean).join(' · ') || '暂无梯队标的'
+function getThemeDailyContent(date: string) {
+  const dailyTopic = themeLadderStore.topics.find(topic => topic.name === DAILY_THEME_TOPIC_NAME)
+  const dailyContent = getThemeEntryContent(dailyTopic?.entries[date])
+  if (dailyContent) return dailyContent
+  return themeLadderStore.topics
+    .filter(topic => topic.name !== DAILY_THEME_TOPIC_NAME && !!topic.entries[date])
+    .map(topic => {
+      const content = getThemeEntryContent(topic.entries[date])
+      return content ? `${topic.name}：\n${content}` : ''
+    })
+    .filter(Boolean)
+    .join('\n\n')
 }
 
 // 连板楼梯图独立的显示范围控制
@@ -2264,116 +2164,10 @@ function deleteEdit() {
 .theme-legend.diverge { color: #79c0ff; background: rgba(88, 166, 255, .12); border-color: rgba(88, 166, 255, .24); }
 .theme-legend.weak { color: #8b949e; background: rgba(139, 148, 158, .1); border-color: rgba(139, 148, 158, .2); }
 
-.theme-add-form {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.theme-add-form input {
-  width: 150px;
-  padding: 6px 9px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  color: var(--text-primary);
-  font-size: 12px;
-}
-
-.theme-add-form input:focus {
-  outline: none;
-  border-color: var(--color-blue);
-}
-
-.theme-add-form button {
-  padding: 6px 10px;
-  border-radius: 4px;
-  font-size: 12px;
-}
-
 .theme-ladder-matrix {
   display: flex;
-  gap: 8px;
   min-width: 0;
-}
-
-.theme-topic-column {
-  width: var(--stair-axis-width);
-  flex: 0 0 var(--stair-axis-width);
-}
-
-.theme-topic-corner,
-.theme-ladder-date {
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
-  font-size: 10px;
-  font-weight: 600;
-}
-
-.theme-topic-name {
-  position: relative;
-  height: 74px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px 5px 22px;
-  box-sizing: border-box;
-  background: rgba(163, 113, 247, .07);
-  border: 1px solid var(--border-color);
-  border-top: 0;
-  color: var(--text-primary);
-  font-size: 12px;
-}
-
-.theme-topic-name strong {
-  width: 100%;
-  min-width: 0;
-  overflow: hidden;
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.theme-topic-controls {
-  position: absolute;
-  right: 4px;
-  bottom: 3px;
-  display: flex;
-  gap: 3px;
-}
-
-.theme-topic-controls button {
-  width: 16px;
-  height: 15px;
-  padding: 0;
-  border: 1px solid var(--border-color);
-  border-radius: 3px;
-  background: var(--bg-tertiary);
-  color: var(--text-tertiary);
-  font-size: 10px;
-  line-height: 12px;
-}
-
-.theme-topic-controls button:not(:disabled):hover {
-  border-color: var(--color-blue);
-  color: var(--color-blue);
-}
-
-.theme-topic-controls button:disabled {
-  cursor: default;
-  opacity: .3;
-}
-
-.theme-topic-controls .danger:not(:disabled):hover {
-  background: rgba(248, 81, 73, .16);
-  border-color: rgba(248, 81, 73, .55);
-  color: #f85149;
+  padding-left: calc(var(--stair-axis-width) + 8px);
 }
 
 .theme-ladder-scroll {
@@ -2389,66 +2183,152 @@ function deleteEdit() {
 }
 
 .theme-ladder-date-row,
-.theme-ladder-topic-row {
+.theme-ladder-card-row {
   display: flex;
 }
 
 .theme-ladder-date {
+  height: 32px;
   flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
   border-left: 0;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
 }
 
 .theme-ladder-date:first-child {
   border-left: 1px solid var(--border-color);
 }
 
-.theme-heat-cell {
-  height: 74px;
+.theme-day-column {
   flex: 0 0 auto;
+  box-sizing: border-box;
+  padding: 4px 3px 2px;
+  background: rgba(110, 118, 129, .025);
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.theme-day-column:first-child {
+  border-left: 1px solid var(--border-color);
+}
+
+.theme-topic-card {
+  position: relative;
+  width: 100%;
+  min-height: 112px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 3px;
   box-sizing: border-box;
-  padding: 5px 4px;
+  margin-bottom: 4px;
+  padding: 22px 4px 6px;
   overflow: hidden;
-  background: var(--bg-primary);
-  border: 0;
-  border-right: 1px solid var(--border-color);
-  border-bottom: 1px solid var(--border-color);
+  background: rgba(163, 113, 247, .055);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
   color: var(--text-secondary);
   cursor: pointer;
 }
 
-.theme-heat-cell:first-child {
-  border-left: 1px solid var(--border-color);
+.theme-topic-card:last-child {
+  margin-bottom: 0;
 }
 
-.theme-heat-cell:not(:disabled):hover {
+.theme-topic-card:not(:disabled):hover {
   filter: brightness(1.12);
-  box-shadow: inset 0 0 0 1px rgba(88, 166, 255, .55);
+  border-color: rgba(88, 166, 255, .62);
+  box-shadow: 0 2px 7px rgba(0, 0, 0, .18);
 }
 
-.theme-heat-cell:disabled {
+.theme-topic-card:disabled {
   cursor: default;
   opacity: 1;
 }
 
-.theme-heat-cell.strong { background: linear-gradient(135deg, rgba(248, 81, 73, .26), rgba(248, 81, 73, .1)); }
-.theme-heat-cell.warm { background: linear-gradient(135deg, rgba(227, 179, 65, .22), rgba(227, 179, 65, .08)); }
-.theme-heat-cell.diverge { background: linear-gradient(135deg, rgba(88, 166, 255, .2), rgba(88, 166, 255, .06)); }
-.theme-heat-cell.weak { background: rgba(139, 148, 158, .08); }
+.theme-topic-card.strong { background: linear-gradient(135deg, rgba(248, 81, 73, .26), rgba(248, 81, 73, .1)); }
+.theme-topic-card.warm { background: linear-gradient(135deg, rgba(227, 179, 65, .22), rgba(227, 179, 65, .08)); }
+.theme-topic-card.diverge { background: linear-gradient(135deg, rgba(88, 166, 255, .2), rgba(88, 166, 255, .06)); }
+.theme-topic-card.weak { background: rgba(139, 148, 158, .08); }
+
+.theme-card-content {
+  display: -webkit-box;
+  width: 100%;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 9px;
+  font-weight: 400;
+  line-height: 1.35;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+}
+
+.theme-add-card {
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 3px;
+  border: 1px dashed rgba(88, 166, 255, .38);
+  border-radius: 6px;
+  background: rgba(88, 166, 255, .05);
+  color: var(--color-blue);
+  font-size: 9px;
+}
+
+.theme-add-card:hover {
+  border-color: var(--color-blue);
+  background: rgba(88, 166, 255, .12);
+}
+
+.theme-day-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.theme-card-topic-name {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 19px;
+  padding: 3px 4px;
+  overflow: hidden;
+  box-sizing: border-box;
+  background: rgba(163, 113, 247, .16);
+  color: var(--text-primary);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 13px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .theme-ladder-shape {
+  display: -webkit-box;
   max-width: 100%;
   overflow: hidden;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
-  line-height: 1.15;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.25;
+  text-align: center;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .theme-core-name {
@@ -2493,18 +2373,160 @@ function deleteEdit() {
   font-size: 15px;
 }
 
-.theme-entry-dialog {
-  width: min(860px, calc(100vw - 32px));
+.theme-expanded-card {
+  margin-top: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(88, 166, 255, .45);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
 }
 
-.theme-entry-body {
-  max-height: 68vh;
+.theme-expanded-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border-color);
+  background: rgba(88, 166, 255, .06);
+}
+
+.theme-expanded-header > div {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.theme-expanded-header strong {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.theme-expanded-header small {
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.theme-expanded-body {
+  padding: 14px;
+}
+
+.theme-expanded-body textarea {
+  width: 100%;
+  min-height: 280px;
+  box-sizing: border-box;
+  padding: 12px;
+  resize: vertical;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.theme-expanded-body textarea:focus {
+  outline: none;
+  border-color: var(--color-blue);
+}
+
+.theme-expanded-body textarea:read-only {
+  cursor: default;
+}
+
+.theme-expanded-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border-color);
+}
+
+.theme-expanded-footer button {
+  min-width: 100px;
+  padding: 8px 14px;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+
+.theme-topic-card.active {
+  border-color: var(--color-blue);
+  box-shadow: 0 0 0 1px rgba(88, 166, 255, .35);
 }
 
 .theme-meta-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+.theme-count-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 2px 0 8px;
+}
+
+.theme-count-heading > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.theme-count-heading strong {
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.theme-count-heading small {
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.theme-count-heading button {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.theme-height-count-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.theme-height-count-field {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+  padding: 5px 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: rgba(110, 118, 129, .05);
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.theme-height-count-field input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 11px;
+  text-align: center;
 }
 
 .theme-stock-heading {
@@ -2548,8 +2570,8 @@ function deleteEdit() {
 }
 
 .theme-stock-editor-row {
-  display: grid;
-  grid-template-columns: minmax(120px, 1.2fr) 92px 115px minmax(100px, 1fr) 102px 28px;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   padding: 7px;
@@ -2575,13 +2597,30 @@ function deleteEdit() {
 .height-field {
   display: grid;
   grid-template-columns: auto 1fr;
+  flex: 0 1 108px;
   align-items: center;
   gap: 5px;
   color: var(--text-tertiary);
   font-size: 10px;
 }
 
+.theme-stock-editor-row > .theme-stock-name-input {
+  width: auto;
+  flex: 1 1 180px;
+}
+
+.theme-stock-editor-row > select {
+  width: auto;
+  flex: 1 1 138px;
+}
+
+.theme-stock-editor-row > .theme-branch-input {
+  width: auto;
+  flex: 1 1 150px;
+}
+
 .theme-branch-placeholder {
+  flex: 1 1 100px;
   color: var(--text-tertiary);
   text-align: center;
 }
@@ -2593,6 +2632,7 @@ function deleteEdit() {
   color: var(--text-secondary);
   font-size: 10px;
   white-space: nowrap;
+  flex: 0 1 105px;
 }
 
 .unique-check input {
@@ -2600,6 +2640,8 @@ function deleteEdit() {
 }
 
 .remove-stock-button {
+  flex: 0 0 28px;
+  margin-left: auto;
   width: 28px;
   height: 28px;
   padding: 0;
@@ -3213,6 +3255,7 @@ function deleteEdit() {
   padding: 8px 12px;
   border-radius: 4px;
   font-size: 13px;
+  white-space: nowrap;
 }
 
 .btn-secondary {
@@ -3236,35 +3279,16 @@ function deleteEdit() {
     flex-direction: column;
   }
 
-  .theme-add-form,
-  .theme-add-form input {
-    width: 100%;
-  }
-
-  .theme-add-form button {
-    flex-shrink: 0;
-  }
-
   .theme-stock-heading,
-  .theme-stock-heading > div {
+  .theme-stock-heading > div,
+  .theme-count-heading,
+  .theme-count-heading > div {
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .theme-stock-editor-row {
-    grid-template-columns: minmax(0, 1fr) 86px 28px;
-  }
-
-  .theme-stock-name-input,
-  .theme-stock-editor-row > select,
-  .theme-branch-input,
-  .theme-branch-placeholder,
-  .unique-check {
-    grid-column: span 3;
-  }
-
-  .height-field {
-    grid-column: span 2;
+  .theme-height-count-grid {
+    grid-template-columns: repeat(2, minmax(100px, 1fr));
   }
 
   .theme-meta-grid {
