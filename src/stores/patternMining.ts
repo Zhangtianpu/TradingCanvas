@@ -70,7 +70,7 @@ export const usePatternMiningStore = defineStore('patternMining', () => {
   }
 
   function statsForMode(modeId: string): PatternStats {
-    const all = trades.value.filter(item => item.modeId === modeId)
+    const all = modeId === 'all' ? trades.value : trades.value.filter(item => item.modeId === modeId)
     const closed = all.filter(item => item.sellPrice !== undefined && item.sellDate)
     const returns = closed.map(item => returnRate(item) || 0)
     const gains = returns.filter(value => value > 0)

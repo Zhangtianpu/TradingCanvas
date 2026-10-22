@@ -13,11 +13,12 @@
     <div v-if="tradeModeStore.tradeModes.length" class="analysis-toolbar">
       <div>
         <strong>模式统计</strong>
-        <span>切换模式查看独立的验证结果</span>
+        <span>默认汇总所有模式，也可切换查看单一模式</span>
       </div>
       <label class="mode-select">
         <span>分析模式</span>
         <select v-model="selectedModeId">
+          <option :value="ALL_MODE_ID">全部模式</option>
           <option v-for="mode in tradeModeStore.tradeModes" :key="mode.id" :value="mode.id">{{ mode.name }}</option>
         </select>
       </label>
@@ -51,9 +52,10 @@
       <div class="list-head"><span>验证记录</span><small>统计仅基于已填写卖点的记录</small></div>
       <div v-if="modeTrades.length" class="table-wrap">
         <table>
-          <thead><tr><th>标的</th><th>买点</th><th>卖点</th><th>收益</th><th>备注</th><th></th></tr></thead>
+          <thead><tr><th>模式</th><th>标的</th><th>买点</th><th>卖点</th><th>收益</th><th>备注</th><th></th></tr></thead>
           <tbody>
             <tr v-for="trade in modeTrades" :key="trade.id">
+              <td><span class="trade-mode-badge" :style="{ '--mode-color': modeColor(trade.modeId) }">{{ modeName(trade.modeId) }}</span></td>
               <td><b>{{ trade.stockName }}</b><small>{{ trade.stockCode || '—' }}</small></td>
               <td>{{ trade.buyPrice.toFixed(2) }}<small>{{ trade.buyDate }}</small></td>
               <td v-if="trade.sellPrice">{{ trade.sellPrice.toFixed(2) }}<small>{{ trade.sellDate }}</small></td>
@@ -65,7 +67,7 @@
           </tbody>
         </table>
       </div>
-      <div v-else class="empty-tip">这个模式还没有虚拟交易记录。</div>
+      <div v-else class="empty-tip">{{ selectedModeId === ALL_MODE_ID ? '还没有虚拟交易记录。' : '这个模式还没有虚拟交易记录。' }}</div>
     </div>
 
     <div v-if="closingId" class="modal-overlay" @click.self="closingId = null">
@@ -87,10 +89,11 @@ import type { PatternTrade } from '@/types'
 
 const tradeModeStore = useTradeModeStore()
 const patternStore = usePatternMiningStore()
-const selectedModeId = ref(tradeModeStore.tradeModes[0]?.id || '')
+const ALL_MODE_ID = 'all'
+const selectedModeId = ref(ALL_MODE_ID)
 const today = () => new Date().toISOString().slice(0, 10)
 const PATTERN_DRAFT_KEY = 'pattern-mining-trade-draft'
-const emptyTradeForm = () => ({ modeId: selectedModeId.value, stockName: '', stockCode: '', buyDate: today(), buyPrice: 0, quantity: 100, note: '' })
+const emptyTradeForm = () => ({ modeId: tradeModeStore.tradeModes[0]?.id || '', stockName: '', stockCode: '', buyDate: today(), buyPrice: 0, quantity: 100, note: '' })
 
 function loadTradeDraft() {
   try {
@@ -109,12 +112,14 @@ const closeForm = reactive({ sellDate: today(), sellPrice: 0 })
 const saveMessage = ref('')
 const saveMessageType = ref<'success' | 'error'>('success')
 
-const modeTrades = computed(() => patternStore.sortedTrades.filter(item => item.modeId === selectedModeId.value))
+const modeTrades = computed(() => selectedModeId.value === ALL_MODE_ID
+  ? patternStore.sortedTrades
+  : patternStore.sortedTrades.filter(item => item.modeId === selectedModeId.value))
 const stats = computed(() => patternStore.statsForMode(selectedModeId.value))
 const returnRate = (trade: PatternTrade) => patternStore.returnRate(trade)
 
 watch(() => tradeModeStore.tradeModes, modes => {
-  if (!modes.some(mode => mode.id === selectedModeId.value)) selectedModeId.value = modes[0]?.id || ''
+  if (selectedModeId.value !== ALL_MODE_ID && !modes.some(mode => mode.id === selectedModeId.value)) selectedModeId.value = ALL_MODE_ID
   if (!modes.some(mode => mode.id === form.modeId)) form.modeId = modes[0]?.id || ''
 }, { deep: true })
 
@@ -159,7 +164,6 @@ function submitTrade() {
     setSaveMessage('保存失败：浏览器本地存储不可用或空间不足，输入内容已保留。', 'error')
     return
   }
-  selectedModeId.value = form.modeId
   resetTradeForm()
   showForm.value = false
   setSaveMessage('虚拟买点已保存。', 'success')
@@ -191,6 +195,8 @@ const formatPercent = (value: number) => `${value.toFixed(1)}%`
 const signedPercent = (value: number) => `${value > 0 ? '+' : ''}${value.toFixed(2)}%`
 const formatRatio = (value: number | null) => value === null ? '∞' : value ? `${value.toFixed(2)} : 1` : '—'
 const returnClass = (value: number) => value > 0 ? 'positive' : value < 0 ? 'negative' : ''
+const modeName = (modeId: string) => tradeModeStore.getMode(modeId)?.name || '已删除模式'
+const modeColor = (modeId: string) => tradeModeStore.getMode(modeId)?.color || '#8b949e'
 </script>
 
 <style scoped>
@@ -231,6 +237,7 @@ table { width: 100%; border-collapse: collapse; min-width: 720px; }
 th, td { text-align: left; border-bottom: 1px solid var(--border-color); padding: 9px 8px; font-size: 12px; }
 th { color: var(--text-tertiary); font-weight: 500; }
 td small { display: block; color: var(--text-tertiary); margin-top: 2px; }
+.trade-mode-badge { display: inline-flex; align-items: center; padding: 3px 7px; border: 1px solid color-mix(in srgb, var(--mode-color) 45%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--mode-color) 12%, transparent); color: var(--mode-color); font-size: 10px; white-space: nowrap; }
 .close-btn { padding: 4px 8px; background: rgba(88,166,255,.12); color: var(--color-blue); }
 .open-tag { color: var(--color-gold); }
 .note-cell { max-width: 220px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--text-secondary); }
