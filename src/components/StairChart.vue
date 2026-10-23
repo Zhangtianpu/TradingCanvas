@@ -1060,8 +1060,23 @@ function handleThemeCardClick(date: string) {
   openThemeEntry(date)
 }
 
+const THEME_BLOCK_TEMPLATE = '梯队：\n个数：'
+
 function createThemeEditBlock(title = '', body = '') {
-  return { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, title, body }
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    title,
+    body: body.trim() ? body : THEME_BLOCK_TEMPLATE
+  }
+}
+
+function hasThemeBlockDetails(body: string) {
+  return body
+    .split('\n')
+    .some(line => {
+      const value = line.trim()
+      return value !== '' && !/^梯队[：:]\s*$/.test(value) && !/^个数[：:]\s*$/.test(value)
+    })
 }
 
 function setThemeEditBlocks(content: string) {
@@ -1125,7 +1140,7 @@ function saveThemeEntry() {
   const date = editingThemeCell.value.date
   const content = themeEditBlocks.value
     .map(block => ({ title: block.title.trim(), body: block.body.trim() }))
-    .filter(block => block.title || block.body)
+    .filter(block => block.title || hasThemeBlockDetails(block.body))
     .sort((a, b) => getThemeLimitUpCount(b.body) - getThemeLimitUpCount(a.body))
     .map((block, index) => `${block.title || `未命名题材 ${index + 1}`}\n${block.body}`.trim())
     .join('\n\n')
