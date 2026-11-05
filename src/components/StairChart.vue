@@ -759,6 +759,9 @@ function getAnchorLabelClass(label?: string) {
 }
 
 function getDateTagKeys(e: EmotionDaily) {
+  if (Object.prototype.hasOwnProperty.call(dateTagOverrides.value, e.date)) {
+    return [...dateTagOverrides.value[e.date]]
+  }
   const keys = new Set(e.stairDateTags || [])
   // 兼容旧版已保存的布尔标记。
   if (e.isClear) keys.add('isClear')
@@ -800,6 +803,8 @@ const STAIR_FLAG_KEYS = [
 
 const tagStorageKey = computed(() => `stairChartTags_${props.chartId || 'default'}`)
 const tagOverrides = ref<Record<string, Record<string, TagFlags>>>({})
+const dateTagStorageKey = computed(() => `stairChartDateTags_${props.chartId || 'default'}`)
+const dateTagOverrides = ref<Record<string, string[]>>({})
 
 // 从localStorage加载标签覆盖数据
 function loadTagOverrides() {
@@ -818,6 +823,23 @@ function persistTagOverrides() {
   localStorage.setItem(tagStorageKey.value, JSON.stringify(tagOverrides.value))
   // 通知其他组件标签已更新
   window.dispatchEvent(new CustomEvent('stairChartTagsUpdated', { detail: { chartId: props.chartId } }))
+}
+
+function loadDateTagOverrides() {
+  const saved = localStorage.getItem(dateTagStorageKey.value)
+  if (!saved) return
+  try {
+    dateTagOverrides.value = JSON.parse(saved)
+  } catch {
+    dateTagOverrides.value = {}
+  }
+}
+
+function persistDateTagOverrides() {
+  localStorage.setItem(dateTagStorageKey.value, JSON.stringify(dateTagOverrides.value))
+  window.dispatchEvent(new CustomEvent('stairChartTagsUpdated', {
+    detail: { chartId: props.chartId, dateTags: true }
+  }))
 }
 
 // 生成个股标签的key
@@ -873,6 +895,7 @@ function applyTagOverrides(e: EmotionDaily, stock: SpaceBoardStock | null): Spac
 
 // 初始化加载标签数据
 loadTagOverrides()
+loadDateTagOverrides()
 
 // ===== 独立高度计算存储 =====
 // 每个图表实例独立存储heightCalc，不共享
@@ -1061,6 +1084,13 @@ function handleThemeCardClick(date: string) {
 }
 
 const THEME_BLOCK_TEMPLATE = '梯队：\n个数：'
+const THEME_DAILY_NOTE_TEMPLATE = `1.首板发酵：
+
+2.连板梯队排序：
+
+3.最高板：
+
+4.其他有潜力的连板：`
 
 function createThemeEditBlock(title = '', body = '') {
   return {
@@ -1079,6 +1109,16 @@ function hasThemeBlockDetails(body: string) {
     })
 }
 
+function hasThemeDailyNoteDetails(note: string) {
+  return note
+    .split('\n')
+    .some(line => {
+      const value = line.trim()
+      return value !== ''
+        && !/^\d+[.、]\s*(?:首板发酵|连板梯队排序|最高板|其他有潜力的连板)[：:]\s*$/.test(value)
+    })
+}
+
 function setThemeEditBlocks(content: string) {
   const blocks = getThemeContentBlocks(content)
   themeEditBlocks.value = blocks.length
@@ -1092,9 +1132,9 @@ function openThemeEntry(date: string) {
   editingThemeCell.value = { date }
   themeEntryForm.value = { content }
   themeOriginalContent.value = content
-  themeNote.value = note
   themeOriginalNote.value = note
   themeEditing.value = !props.readOnly && !content && !note
+  themeNote.value = note || (themeEditing.value ? THEME_DAILY_NOTE_TEMPLATE : '')
   setThemeEditBlocks(content)
   nextTick(() => themeExpandedRef.value?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))
 }
@@ -1112,6 +1152,7 @@ function closeThemeEntry() {
 function startThemeEdit() {
   if (props.readOnly) return
   setThemeEditBlocks(themeEntryForm.value.content)
+  if (!themeNote.value) themeNote.value = THEME_DAILY_NOTE_TEMPLATE
   themeEditing.value = true
 }
 
@@ -1144,7 +1185,8 @@ function saveThemeEntry() {
     .sort((a, b) => getThemeLimitUpCount(b.body) - getThemeLimitUpCount(a.body))
     .map((block, index) => `${block.title || `未命名题材 ${index + 1}`}\n${block.body}`.trim())
     .join('\n\n')
-  const note = themeNote.value.trim()
+  const rawNote = themeNote.value.trim()
+  const note = hasThemeDailyNoteDetails(rawNote) ? rawNote : ''
   if (!content && !note) {
     clearThemeDateEntries(date)
     closeThemeEntry()
@@ -1706,15 +1748,8 @@ function closeDateEdit() {
 function saveDateTags() {
   if (!editingDate.value) return
   const selected = [...new Set(dateTagKeys.value)]
-  emotionStore.addOrUpdateEmotion({
-    ...editingDate.value,
-    stairDateTags: selected,
-    isClear: selected.includes('isClear'),
-    isLeaderBreak: selected.includes('isLeaderBreak')
-  })
-  window.dispatchEvent(new CustomEvent('stairChartTagsUpdated', {
-    detail: { chartId: props.chartId, dateTags: true }
-  }))
+  dateTagOverrides.value[editingDate.value.date] = selected
+  persistDateTagOverrides()
   closeDateEdit()
 }
 

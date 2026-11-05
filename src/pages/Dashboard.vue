@@ -554,7 +554,20 @@ function showsDateMarkers(config: LineChartDefinition) {
   return config.group === '涨跌概况' || config.group === '连板情绪'
 }
 
+function loadPrimaryStairDateTags() {
+  try {
+    return JSON.parse(localStorage.getItem('stairChartDateTags_stairChart1') || '{}') as Record<string, string[]>
+  } catch {
+    return {} as Record<string, string[]>
+  }
+}
+
+const primaryStairDateTags = ref<Record<string, string[]>>(loadPrimaryStairDateTags())
+
 function emotionDateTagKeys(emotion: EmotionDaily) {
+  if (Object.prototype.hasOwnProperty.call(primaryStairDateTags.value, emotion.date)) {
+    return [...primaryStairDateTags.value[emotion.date]]
+  }
   const keys = new Set(emotion.stairDateTags || [])
   if (emotion.isClear) keys.add('isClear')
   if (emotion.isLeaderBreak) keys.add('isLeaderBreak')
@@ -840,10 +853,11 @@ watch(() => chartStore.preferences, async () => {
   renderAllCharts()
 }, { deep: true })
 
-// 监听天梯图标签更新（以第一个天梯图为准）
+// 折线图日期标记以第一个天梯图为准，第二个天梯图保持完全独立。
 function onStairChartTagsUpdated(e: Event) {
   const detail = (e as CustomEvent).detail
-  if (detail?.chartId === 'stairChart1' || detail?.dateTags) {
+  if (detail?.chartId === 'stairChart1') {
+    if (detail?.dateTags) primaryStairDateTags.value = loadPrimaryStairDateTags()
     destroyAllCharts()
     nextTick(() => renderAllCharts())
   }
