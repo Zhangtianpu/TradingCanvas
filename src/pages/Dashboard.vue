@@ -151,6 +151,15 @@
                         >
                           <span>{{ chartPointTooltips[chart.key].date }}</span>
                           <strong>{{ chartPointTooltips[chart.key].value }}</strong>
+                          <div
+                            v-for="average in chartPointTooltips[chart.key].averages"
+                            :key="average.id"
+                            class="chart-tooltip-average"
+                          >
+                            <i :style="{ background: average.color }"></i>
+                            <span>{{ average.label }}</span>
+                            <b :style="{ color: average.color }">{{ average.value }}</b>
+                          </div>
                           <em
                             v-for="marker in chartPointTooltips[chart.key].markers"
                             :key="marker.key"
@@ -191,11 +200,11 @@ import { useThemeStore } from '@/stores/theme'
 import { useStockStore } from '@/stores/stock'
 import { useEmotionStore } from '@/stores/emotion'
 import { useReviewStore } from '@/stores/review'
-import { useLineChartStore } from '@/stores/lineChart'
+import { movingAverageLabel, useLineChartStore } from '@/stores/lineChart'
 import { useIndependentLabelStore } from '@/stores/independentLabel'
 import type { LineChartDefinition, LineChartKey, MovingAverageConfig } from '@/stores/lineChart'
 import type { EmotionDaily, IndependentLabel } from '@/types'
-import { buildContinuousBoardPromotionRates } from '@/composables/useEmotionMetrics'
+import { buildBoardStructureMetrics, buildContinuousBoardPromotionRates } from '@/composables/useEmotionMetrics'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -357,7 +366,15 @@ function applyCustomRange() {
 // 图表refs存储
 const chartScrollRefs = ref<Record<string, HTMLElement | null>>({})
 const chartInstances = ref<Record<string, any>>({})
-const chartPointTooltips = ref<Record<string, { x: number; y: number; date: string; value: string; below: boolean; markers: IndependentLabel[] }>>({})
+const chartPointTooltips = ref<Record<string, {
+  x: number
+  y: number
+  date: string
+  value: string
+  below: boolean
+  markers: IndependentLabel[]
+  averages: Array<{ id: string; label: string; value: string; color: string }>
+}>>({})
 let chartRenderVersion = 0
 
 function setChartScrollRef(key: string, el: any) {
@@ -492,6 +509,15 @@ function getChartDataForEmotions(key: LineChartKey, emotions: EmotionDaily[]): n
     const rates = buildContinuousBoardPromotionRates(emotionStore.emotions)
     return emotions.map(e => rates[e.date] || 0)
   }
+  if (key === 'firstBoardCount' || key === 'firstToSecondRate' || key === 'secondToThirdRate') {
+    const metrics = buildBoardStructureMetrics(emotionStore.emotions)
+    const values = key === 'firstBoardCount'
+      ? metrics.firstBoardCounts
+      : key === 'firstToSecondRate'
+        ? metrics.firstToSecondRates
+        : metrics.secondToThirdRates
+    return emotions.map(e => values[e.date] || 0)
+  }
   const dataMap: Record<string, (e: any) => number> = {
     sh: e => e.shIndex || 0,
     sz: e => e.szIndex || 0,
@@ -611,7 +637,7 @@ function createDateMarkerPlugin(config: LineChartDefinition, emotions: EmotionDa
 
 function formatChartValue(key: string, value: number): string {
   if (['sh', 'sz', 'cyb', 'allA'].includes(key)) return value.toFixed(2) + ' 点'
-  if (key === 'sealRate' || key === 'promotionRate') return value.toFixed(2) + '%'
+  if (['sealRate', 'promotionRate', 'firstToSecondRate', 'secondToThirdRate'].includes(key)) return value.toFixed(2) + '%'
   if (key === 'height') return value.toFixed(0) + ' 板'
   if (key === 'targetStocks') return value.toFixed(0) + ' 个'
   return value.toLocaleString() + ' 家'
@@ -652,6 +678,15 @@ function showPointTooltip(key: LineChartKey, event: PointerEvent) {
   const values = getChartData(key)
   const emotion = emotions[nearestIndex]
   if (!point || !emotion) return
+  const averages = chartStore.preferences[key].averages.map(average => {
+    const averageValue = getAverageData(key, emotions, average)[nearestIndex]
+    return {
+      id: average.id,
+      label: movingAverageLabel(average),
+      value: averageValue === null || averageValue === undefined ? '—' : formatChartValue(key, averageValue),
+      color: average.color
+    }
+  })
 
   chartPointTooltips.value = {
     ...chartPointTooltips.value,
@@ -661,7 +696,8 @@ function showPointTooltip(key: LineChartKey, event: PointerEvent) {
       date: emotion.date,
       value: formatChartValue(key, values[nearestIndex] || 0),
       below: point.y < 55,
-      markers: getEmotionDateMarkers(emotion)
+      markers: getEmotionDateMarkers(emotion),
+      averages
     }
   }
 }
@@ -1409,6 +1445,34 @@ watch(() => emotionStore.sortedEmotions.length, async () => {
 .chart-point-tooltip strong {
   color: var(--color-blue);
   font-size: 12px;
+}
+
+.chart-tooltip-average {
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  align-items: center;
+  gap: 5px;
+  min-width: 132px;
+  margin-top: 3px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(139, 148, 158, .18);
+  text-align: left;
+}
+
+.chart-tooltip-average i {
+  width: 8px;
+  height: 2px;
+  border-radius: 2px;
+}
+
+.chart-tooltip-average span {
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.chart-tooltip-average b {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
 }
 
 .chart-point-tooltip em {

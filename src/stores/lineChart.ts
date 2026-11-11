@@ -11,6 +11,9 @@ export type LineChartKey =
   | 'limitDown'
   | 'continuousBoard'
   | 'promotionRate'
+  | 'firstBoardCount'
+  | 'firstToSecondRate'
+  | 'secondToThirdRate'
   | 'sealRate'
   | 'height'
   | 'targetStocks'
@@ -46,6 +49,9 @@ export const LINE_CHART_DEFINITIONS: LineChartDefinition[] = [
   { key: 'limitDown', title: '跌停家数', group: '涨跌概况', color: '#3fb950', fill: true },
   { key: 'continuousBoard', title: '连板家数', group: '连板情绪', color: '#f0c040', fill: true },
   { key: 'promotionRate', title: '连板晋级率', group: '连板情绪', color: '#bc8cff', fill: true },
+  { key: 'firstBoardCount', title: '首板家数', group: '连板情绪', color: '#ff7b72', fill: true },
+  { key: 'firstToSecondRate', title: '一进二概率', group: '连板情绪', color: '#39c5cf', fill: true },
+  { key: 'secondToThirdRate', title: '二进三概率', group: '连板情绪', color: '#d2a8ff', fill: true },
   { key: 'sealRate', title: '封板率', group: '连板情绪', color: '#58a6ff', fill: true },
   { key: 'height', title: '空间板高度', group: '连板情绪', color: '#f0c040', fill: true, special: true },
   { key: 'targetStocks', title: '目标标的', group: '连板情绪', color: '#a371f7', fill: true, special: 'review' }
