@@ -534,8 +534,11 @@
                   :key="`${e.date}-${block.title}`"
                   type="button"
                   class="theme-count-card"
+                  :class="{ 'has-custom-color': !!getThemeCardColor(e.date, block.title) }"
+                  :style="getThemeCardStyle(e.date, block.title)"
                   :title="`${block.title} · 涨停${block.totalCount}家\n${block.body}`"
                   @click="openThemeEntry(e.date)"
+                  @contextmenu.prevent.stop="openThemeColorMenu($event, e.date, block.title)"
                 >
                   <span class="theme-count-card-main">
                     <span class="theme-count-rank">{{ blockIndex + 1 }}</span>
@@ -551,6 +554,40 @@
       </div>
       <div v-else class="theme-count-ladder-empty">题材梯队记录中暂无可计算的涨停家数</div>
     </section>
+
+    <div
+      v-if="themeColorMenu"
+      class="theme-color-menu"
+      :style="{ left: themeColorMenu.x + 'px', top: themeColorMenu.y + 'px' }"
+      @click.stop
+      @contextmenu.prevent
+    >
+      <div class="theme-color-menu-title">
+        <span>{{ themeColorMenu.title }}</span>
+        <small>设置自定义背景色</small>
+      </div>
+      <div class="theme-color-presets">
+        <button
+          v-for="color in themeColorPresets"
+          :key="color"
+          type="button"
+          :class="{ active: getThemeCardColor(themeColorMenu.date, themeColorMenu.title) === color }"
+          :style="{ backgroundColor: color }"
+          :aria-label="`选择颜色 ${color}`"
+          @click="setThemeCardColor(color)"
+        />
+      </div>
+      <label class="theme-color-custom">
+        <span>自定义颜色</span>
+        <input
+          type="color"
+          :value="getThemeCardColor(themeColorMenu.date, themeColorMenu.title) || '#30363d'"
+          @input="setThemeCardColor(($event.target as HTMLInputElement).value, false)"
+          @change="closeThemeColorMenu"
+        >
+      </label>
+      <button type="button" class="theme-color-reset" @click="resetThemeCardColor">恢复默认背景</button>
+    </div>
 
     <!-- 日期节点标签弹窗 -->
     <div v-if="editingDate" class="edit-modal" @click.self="closeDateEdit">
@@ -1408,6 +1445,103 @@ const themeCountBlocksByDate = computed(() => Object.fromEntries(
 
 const themeCountHasData = computed(() => Object.values(themeCountBlocksByDate.value).some(blocks => blocks.length > 0))
 
+type ThemeColorMenuState = {
+  date: string
+  title: string
+  x: number
+  y: number
+}
+
+const themeColorStorageKey = 'themeCountCardColors'
+const themeColorPresets = ['#3b2a58', '#173d5f', '#48381d', '#17442c', '#4a2428', '#243042', '#3b303f', '#30363d']
+const themeCardColors = ref<Record<string, string>>({})
+const themeColorMenu = ref<ThemeColorMenuState | null>(null)
+
+function getThemeColorKey(date: string, title: string) {
+  return `${date}::${title}`
+}
+
+function loadThemeCardColors() {
+  try {
+    const saved = localStorage.getItem(themeColorStorageKey)
+    themeCardColors.value = saved ? JSON.parse(saved) : {}
+  } catch {
+    themeCardColors.value = {}
+  }
+}
+
+function saveThemeCardColors() {
+  localStorage.setItem(themeColorStorageKey, JSON.stringify(themeCardColors.value))
+  window.dispatchEvent(new CustomEvent('theme-card-colors-change', { detail: themeCardColors.value }))
+}
+
+function getThemeCardColor(date: string, title: string) {
+  return themeCardColors.value[getThemeColorKey(date, title)] || ''
+}
+
+function getContrastColor(background: string) {
+  const hex = background.replace('#', '')
+  if (!/^[0-9a-f]{6}$/i.test(hex)) return '#f0f3f6'
+  const red = Number.parseInt(hex.slice(0, 2), 16)
+  const green = Number.parseInt(hex.slice(2, 4), 16)
+  const blue = Number.parseInt(hex.slice(4, 6), 16)
+  return (red * 299 + green * 587 + blue * 114) / 1000 > 150 ? '#17202a' : '#f0f3f6'
+}
+
+function getThemeCardStyle(date: string, title: string) {
+  const backgroundColor = getThemeCardColor(date, title)
+  if (!backgroundColor) return undefined
+  return {
+    background: backgroundColor,
+    borderColor: backgroundColor,
+    color: getContrastColor(backgroundColor)
+  }
+}
+
+function openThemeColorMenu(event: MouseEvent, date: string, title: string) {
+  const menuWidth = 220
+  const menuHeight = 210
+  themeColorMenu.value = {
+    date,
+    title,
+    x: Math.max(8, Math.min(event.clientX, window.innerWidth - menuWidth - 8)),
+    y: Math.max(8, Math.min(event.clientY, window.innerHeight - menuHeight - 8))
+  }
+}
+
+function closeThemeColorMenu() {
+  themeColorMenu.value = null
+}
+
+function setThemeCardColor(color: string, closeMenu = true) {
+  if (!themeColorMenu.value) return
+  const key = getThemeColorKey(themeColorMenu.value.date, themeColorMenu.value.title)
+  themeCardColors.value = { ...themeCardColors.value, [key]: color }
+  saveThemeCardColors()
+  if (closeMenu) closeThemeColorMenu()
+}
+
+function resetThemeCardColor() {
+  if (!themeColorMenu.value) return
+  const key = getThemeColorKey(themeColorMenu.value.date, themeColorMenu.value.title)
+  const nextColors = { ...themeCardColors.value }
+  delete nextColors[key]
+  themeCardColors.value = nextColors
+  saveThemeCardColors()
+  closeThemeColorMenu()
+}
+
+function onThemeColorDocumentPointer(event: MouseEvent) {
+  if (!(event.target as HTMLElement | null)?.closest('.theme-color-menu')) closeThemeColorMenu()
+}
+
+function syncThemeCardColors(event: Event) {
+  const colors = (event as CustomEvent<Record<string, string>>).detail
+  if (colors) themeCardColors.value = { ...colors }
+}
+
+loadThemeCardColors()
+
 function applyCustomStairRange() {
   if (customStairRange.value && customStairRange.value >= 1 && customStairRange.value <= 365) {
     stairRange.value = customStairRange.value
@@ -1550,6 +1684,8 @@ onMounted(() => {
     nextTick(updateScrollbar)
   })
   window.addEventListener('resize', updateScrollbar)
+  window.addEventListener('theme-card-colors-change', syncThemeCardColors)
+  document.addEventListener('mousedown', onThemeColorDocumentPointer)
 
   // 监听容器尺寸变化
   if (scrollContainerRef.value) {
@@ -1560,6 +1696,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', updateScrollbar)
+  window.removeEventListener('theme-card-colors-change', syncThemeCardColors)
+  document.removeEventListener('mousedown', onThemeColorDocumentPointer)
   if (resizeObserver) {
     resizeObserver.disconnect()
     resizeObserver = null
@@ -2749,6 +2887,105 @@ function deleteEdit() {
   font-size: 9px;
   line-height: 1.2;
   white-space: nowrap;
+}
+
+.theme-count-card.has-custom-color .theme-count-rank,
+.theme-count-card.has-custom-color b {
+  border-color: currentColor;
+  background: rgba(0, 0, 0, .18);
+  color: inherit;
+}
+
+.theme-color-menu {
+  position: fixed;
+  z-index: 1200;
+  width: 220px;
+  padding: 12px;
+  box-sizing: border-box;
+  border: 1px solid #3d4857;
+  border-radius: 8px;
+  background: #161b22;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, .48);
+}
+
+.theme-color-menu-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.theme-color-menu-title span {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.theme-color-menu-title small {
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.theme-color-presets {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.theme-color-presets button {
+  height: 28px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.theme-color-presets button:hover,
+.theme-color-presets button.active {
+  border-color: #f0f6fc;
+  box-shadow: 0 0 0 2px rgba(88, 166, 255, .35);
+}
+
+.theme-color-custom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 0;
+  border-top: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.theme-color-custom input {
+  width: 34px;
+  height: 26px;
+  padding: 1px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.theme-color-reset {
+  width: 100%;
+  margin-top: 3px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.theme-color-reset:hover {
+  border-color: #8b949e;
+  color: var(--text-primary);
 }
 
 .theme-count-day-empty {
