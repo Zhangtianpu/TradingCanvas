@@ -586,6 +586,15 @@
         <span>主升题材</span>
         <small>标记当前市场主升方向</small>
       </button>
+      <button
+        type="button"
+        class="theme-focus-watch-option"
+        :class="{ active: getThemeCardColor(themeColorMenu.date, themeColorMenu.title) === 'focus-watch' }"
+        @click="setThemeCardColor('focus-watch')"
+      >
+        <span>重点观察</span>
+        <small>标记需要持续跟踪的题材</small>
+      </button>
       <div class="theme-color-presets">
         <button
           v-for="color in themeColorPresets"
@@ -1524,6 +1533,14 @@ function getThemeCardStyle(date: string, title: string) {
       boxShadow: 'inset 3px 0 0 #ff7b72'
     }
   }
+  if (backgroundColor === 'focus-watch') {
+    return {
+      background: 'linear-gradient(135deg, #17344d 0%, #194d63 58%, #1e5a5e 100%)',
+      borderColor: '#3d8fa3',
+      color: '#effbff',
+      boxShadow: 'inset 3px 0 0 #56d4dd'
+    }
+  }
   return {
     background: backgroundColor,
     borderColor: backgroundColor,
@@ -1533,7 +1550,7 @@ function getThemeCardStyle(date: string, title: string) {
 
 function openThemeColorMenu(event: MouseEvent, date: string, title: string) {
   const menuWidth = 220
-  const menuHeight = 270
+  const menuHeight = 330
   themeColorMenu.value = {
     date,
     title,
@@ -3026,6 +3043,37 @@ function deleteEdit() {
 .theme-main-rise-option.active {
   border-color: #ff9b91;
   box-shadow: 0 0 0 2px rgba(248, 81, 73, .25);
+}
+
+.theme-focus-watch-option {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(61, 143, 163, .7);
+  border-radius: 6px;
+  background: linear-gradient(135deg, #17344d 0%, #194d63 58%, #1e5a5e 100%);
+  color: #effbff;
+  cursor: pointer;
+}
+
+.theme-focus-watch-option span {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.theme-focus-watch-option small {
+  color: rgba(239, 251, 255, .68);
+  font-size: 9px;
+}
+
+.theme-focus-watch-option:hover,
+.theme-focus-watch-option.active {
+  border-color: #79e4eb;
+  box-shadow: 0 0 0 2px rgba(86, 212, 221, .22);
 }
 
 .theme-color-presets {
