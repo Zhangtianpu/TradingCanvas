@@ -517,9 +517,20 @@
                 v-for="e in displayEmotions"
                 :key="`theme-count-date-${e.id}`"
                 class="theme-count-date"
+                :class="{ 'has-date-tag': getActiveDateTagDefs(e).length > 0 }"
                 :style="{ width: cellWidth + 'px' }"
+                :title="readOnly ? '' : '点击标注龙头断板或中位出清'"
+                @click="!readOnly && handleDateClick(e)"
               >
-                {{ e.date.slice(5) }}
+                <span class="theme-count-date-label">{{ e.date.slice(5) }}</span>
+                <span class="theme-count-date-badges">
+                  <span
+                    v-for="def in getActiveDateTagDefs(e)"
+                    :key="def.key"
+                    class="date-tag-badge"
+                    :style="{ background: def.color }"
+                  >{{ def.badge || def.name.slice(0, 1) }}</span>
+                </span>
               </div>
             </div>
             <div class="theme-count-days-row">
@@ -566,6 +577,15 @@
         <span>{{ themeColorMenu.title }}</span>
         <small>设置自定义背景色</small>
       </div>
+      <button
+        type="button"
+        class="theme-main-rise-option"
+        :class="{ active: getThemeCardColor(themeColorMenu.date, themeColorMenu.title) === 'main-rise' }"
+        @click="setThemeCardColor('main-rise')"
+      >
+        <span>主升题材</span>
+        <small>标记当前市场主升方向</small>
+      </button>
       <div class="theme-color-presets">
         <button
           v-for="color in themeColorPresets"
@@ -581,7 +601,7 @@
         <span>自定义颜色</span>
         <input
           type="color"
-          :value="getThemeCardColor(themeColorMenu.date, themeColorMenu.title) || '#30363d'"
+          :value="getThemeColorPickerValue(themeColorMenu.date, themeColorMenu.title)"
           @input="setThemeCardColor(($event.target as HTMLInputElement).value, false)"
           @change="closeThemeColorMenu"
         >
@@ -597,7 +617,7 @@
           <button class="btn-close" @click="closeDateEdit">×</button>
         </div>
         <div class="edit-body">
-          <p class="date-tag-help">可选择一个或多个节点标签，保存后同步到折线图。</p>
+          <p class="date-tag-help">可选择一个或多个节点标签，保存后显示在连板与题材天梯图日期栏，并同步到折线图。</p>
           <div class="date-tag-grid">
             <label v-for="def in stairDateTagDefs" :key="def.key" class="date-tag-option">
               <input v-model="dateTagKeys" type="checkbox" :value="def.key" />
@@ -1479,6 +1499,11 @@ function getThemeCardColor(date: string, title: string) {
   return themeCardColors.value[getThemeColorKey(date, title)] || ''
 }
 
+function getThemeColorPickerValue(date: string, title: string) {
+  const color = getThemeCardColor(date, title)
+  return /^#[0-9a-f]{6}$/i.test(color) ? color : '#30363d'
+}
+
 function getContrastColor(background: string) {
   const hex = background.replace('#', '')
   if (!/^[0-9a-f]{6}$/i.test(hex)) return '#f0f3f6'
@@ -1491,6 +1516,14 @@ function getContrastColor(background: string) {
 function getThemeCardStyle(date: string, title: string) {
   const backgroundColor = getThemeCardColor(date, title)
   if (!backgroundColor) return undefined
+  if (backgroundColor === 'main-rise') {
+    return {
+      background: 'linear-gradient(135deg, #5a2026 0%, #7a2d2d 58%, #8f3d22 100%)',
+      borderColor: '#d05a4e',
+      color: '#fff5f2',
+      boxShadow: 'inset 3px 0 0 #ff7b72'
+    }
+  }
   return {
     background: backgroundColor,
     borderColor: backgroundColor,
@@ -1500,7 +1533,7 @@ function getThemeCardStyle(date: string, title: string) {
 
 function openThemeColorMenu(event: MouseEvent, date: string, title: string) {
   const menuWidth = 220
-  const menuHeight = 210
+  const menuHeight = 270
   themeColorMenu.value = {
     date,
     title,
@@ -2744,7 +2777,8 @@ function deleteEdit() {
 }
 
 .theme-count-date {
-  height: 36px;
+  position: relative;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2757,6 +2791,40 @@ function deleteEdit() {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: .2px;
+  cursor: pointer;
+  transition: background .16s ease, color .16s ease;
+}
+
+.theme-count-date:hover {
+  background: rgba(139, 148, 158, .16);
+  color: var(--text-primary);
+}
+
+.theme-count-date.has-date-tag {
+  align-items: flex-start;
+  padding-top: 6px;
+  background: rgba(139, 148, 158, .14);
+}
+
+.theme-count-date-label {
+  line-height: 1;
+}
+
+.theme-count-date-badges {
+  position: absolute;
+  right: 3px;
+  bottom: 4px;
+  left: 3px;
+  display: flex;
+  justify-content: center;
+  gap: 3px;
+  overflow: hidden;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.theme-count-date-badges:empty {
+  display: none;
 }
 
 .theme-count-ladder-scroll {
@@ -2927,6 +2995,37 @@ function deleteEdit() {
 .theme-color-menu-title small {
   color: var(--text-tertiary);
   font-size: 10px;
+}
+
+.theme-main-rise-option {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(208, 90, 78, .65);
+  border-radius: 6px;
+  background: linear-gradient(135deg, #5a2026 0%, #7a2d2d 58%, #8f3d22 100%);
+  color: #fff5f2;
+  cursor: pointer;
+}
+
+.theme-main-rise-option span {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.theme-main-rise-option small {
+  color: rgba(255, 245, 242, .68);
+  font-size: 9px;
+}
+
+.theme-main-rise-option:hover,
+.theme-main-rise-option.active {
+  border-color: #ff9b91;
+  box-shadow: 0 0 0 2px rgba(248, 81, 73, .25);
 }
 
 .theme-color-presets {
