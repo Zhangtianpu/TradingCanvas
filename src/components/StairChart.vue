@@ -472,8 +472,17 @@
           </div>
           <div v-else class="theme-horizontal-empty">当天暂无题材梯队记录</div>
           <div v-if="themeEditing" class="theme-daily-note-editor">
-            <label for="theme-daily-note">当日备注</label>
-            <textarea id="theme-daily-note" v-model="themeNote" rows="3" placeholder="记录当天题材强弱、轮动节奏、观察重点等"></textarea>
+            <div class="theme-daily-note-heading">
+              <label for="theme-daily-note">当日备注</label>
+              <small>{{ themeNoteSaveText }} · 拖动右下角调整大小</small>
+            </div>
+            <textarea
+              id="theme-daily-note"
+              v-model="themeNote"
+              rows="3"
+              placeholder="记录当天题材强弱、轮动节奏、观察重点等"
+              @input="queueThemeNoteAutoSave"
+            ></textarea>
           </div>
           <div v-else-if="themeNote" class="theme-daily-note">
             <strong>当日备注</strong>
@@ -1175,6 +1184,13 @@ const themeOriginalNote = ref('')
 const themeEditing = ref(false)
 const themeEditBlocks = ref<Array<{ id: string; title: string; body: string }>>([])
 const themeExpandedRef = ref<HTMLElement | null>(null)
+const themeNoteSaveState = ref<'idle' | 'pending' | 'saved'>('idle')
+const themeNoteSaveText = computed(() => {
+  if (themeNoteSaveState.value === 'pending') return '正在自动保存…'
+  if (themeNoteSaveState.value === 'saved') return '已自动保存'
+  return '输入后自动保存'
+})
+let themeNoteSaveTimer: number | null = null
 const themeCompareMode = ref(false)
 const themeCompareDates = ref<string[]>([])
 const selectedThemeCompareDates = computed(() => displayEmotions.value
@@ -1242,6 +1258,62 @@ function hasThemeDailyNoteDetails(note: string) {
     })
 }
 
+function persistThemeNote(date: string) {
+  const rawNote = themeNote.value.trim()
+  const note = hasThemeDailyNoteDetails(rawNote) ? rawNote : ''
+  const content = getThemeDailyContent(date)
+
+  if (!content && !note) {
+    clearThemeDateEntries(date)
+  } else {
+    let targetTopic = themeLadderStore.topics.find(topic => topic.name === DAILY_THEME_TOPIC_NAME)
+    targetTopic ||= themeLadderStore.addTopic(DAILY_THEME_TOPIC_NAME) || undefined
+    if (!targetTopic) return
+
+    const oldTopicIds = themeLadderStore.topics
+      .filter(topic => topic.id !== targetTopic?.id && !!topic.entries[date])
+      .map(topic => topic.id)
+    for (const topicId of oldTopicIds) themeLadderStore.clearEntry(topicId, date)
+    themeLadderStore.saveEntry(targetTopic.id, date, {
+      content,
+      stocks: [],
+      heightCounts: {},
+      note
+    })
+    for (const topicId of oldTopicIds) removeThemeTopicIfEmpty(topicId)
+  }
+
+  if (editingThemeCell.value?.date === date) {
+    themeOriginalNote.value = note
+    themeNoteSaveState.value = 'saved'
+  }
+}
+
+function clearThemeNoteSaveTimer() {
+  if (themeNoteSaveTimer !== null) {
+    window.clearTimeout(themeNoteSaveTimer)
+    themeNoteSaveTimer = null
+  }
+}
+
+function queueThemeNoteAutoSave() {
+  if (!editingThemeCell.value || props.readOnly) return
+  clearThemeNoteSaveTimer()
+  themeNoteSaveState.value = 'pending'
+  const date = editingThemeCell.value.date
+  themeNoteSaveTimer = window.setTimeout(() => {
+    themeNoteSaveTimer = null
+    persistThemeNote(date)
+  }, 500)
+}
+
+function flushThemeNoteAutoSave() {
+  if (themeNoteSaveTimer === null || !editingThemeCell.value) return
+  const date = editingThemeCell.value.date
+  clearThemeNoteSaveTimer()
+  persistThemeNote(date)
+}
+
 function setThemeEditBlocks(content: string) {
   const blocks = getThemeContentBlocks(content)
   themeEditBlocks.value = blocks.length
@@ -1250,6 +1322,7 @@ function setThemeEditBlocks(content: string) {
 }
 
 function openThemeEntry(date: string) {
+  flushThemeNoteAutoSave()
   const content = getThemeDailyContent(date)
   const note = getThemeDailyNote(date)
   editingThemeCell.value = { date }
@@ -1258,16 +1331,19 @@ function openThemeEntry(date: string) {
   themeOriginalNote.value = note
   themeEditing.value = !props.readOnly && !content && !note
   themeNote.value = note || (themeEditing.value ? THEME_DAILY_NOTE_TEMPLATE : '')
+  themeNoteSaveState.value = 'idle'
   setThemeEditBlocks(content)
   nextTick(() => themeExpandedRef.value?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))
 }
 
 function closeThemeEntry() {
+  flushThemeNoteAutoSave()
   editingThemeCell.value = null
   themeEntryForm.value = { content: '' }
   themeOriginalContent.value = ''
   themeNote.value = ''
   themeOriginalNote.value = ''
+  themeNoteSaveState.value = 'idle'
   themeEditing.value = false
   themeEditBlocks.value = []
 }
@@ -1276,6 +1352,7 @@ function startThemeEdit() {
   if (props.readOnly) return
   setThemeEditBlocks(themeEntryForm.value.content)
   if (!themeNote.value) themeNote.value = THEME_DAILY_NOTE_TEMPLATE
+  themeNoteSaveState.value = 'idle'
   themeEditing.value = true
 }
 
@@ -1289,6 +1366,7 @@ function removeThemeEditBlock(index: number) {
 }
 
 function cancelThemeEdit() {
+  flushThemeNoteAutoSave()
   themeEntryForm.value = { content: themeOriginalContent.value }
   themeNote.value = themeOriginalNote.value
   if (!themeOriginalContent.value && !themeOriginalNote.value) {
@@ -1301,6 +1379,7 @@ function cancelThemeEdit() {
 
 function saveThemeEntry() {
   if (!editingThemeCell.value) return
+  clearThemeNoteSaveTimer()
   const date = editingThemeCell.value.date
   const content = themeEditBlocks.value
     .map(block => ({ title: block.title.trim(), body: block.body.trim() }))
@@ -1344,6 +1423,8 @@ function removeThemeTopicIfEmpty(topicId: string) {
 
 function clearThemeEntry() {
   if (!editingThemeCell.value) return
+  clearThemeNoteSaveTimer()
+  themeNoteSaveState.value = 'idle'
   clearThemeDateEntries(editingThemeCell.value.date)
   closeThemeEntry()
 }
@@ -1745,6 +1826,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  flushThemeNoteAutoSave()
   window.removeEventListener('resize', updateScrollbar)
   window.removeEventListener('theme-card-colors-change', syncThemeCardColors)
   document.removeEventListener('mousedown', onThemeColorDocumentPointer)
@@ -3670,17 +3752,32 @@ function deleteEdit() {
   border-top: 1px solid var(--border-color);
 }
 
-.theme-daily-note-editor label {
-  display: block;
+.theme-daily-note-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 7px;
+}
+
+.theme-daily-note-heading label {
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 700;
 }
 
+.theme-daily-note-heading small {
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
 .theme-daily-note-editor textarea {
+  width: min(100%, 720px);
+  min-width: min(320px, 100%);
+  max-width: 100%;
   min-height: 78px;
-  resize: vertical;
+  resize: both;
+  overflow: auto;
 }
 
 .theme-add-card {
