@@ -495,6 +495,63 @@
       </div>
     </section>
 
+    <!-- 题材涨停天梯图：根据每日题材记录中的涨停总数自动生成 -->
+    <section v-if="displayEmotions.length > 0" class="theme-count-ladder-section">
+      <div class="theme-count-ladder-header">
+        <div>
+          <strong>题材涨停天梯图</strong>
+          <small>按题材涨停家数排列，日期与连板天梯图保持一致</small>
+        </div>
+      </div>
+
+      <div v-if="themeCountHasData" class="theme-count-ladder-matrix">
+        <div class="theme-count-guide" aria-hidden="true">
+          <strong>题材排行</strong>
+          <span>按涨停家数</span>
+          <small>由强到弱 ↓</small>
+        </div>
+        <div ref="themeCountScrollRef" class="theme-count-ladder-scroll" @scroll="onThemeCountScroll">
+          <div class="theme-count-ladder-grid" :style="{ width: displayEmotions.length * cellWidth + 'px' }">
+            <div class="theme-count-date-row">
+              <div
+                v-for="e in displayEmotions"
+                :key="`theme-count-date-${e.id}`"
+                class="theme-count-date"
+                :style="{ width: cellWidth + 'px' }"
+              >
+                {{ e.date.slice(5) }}
+              </div>
+            </div>
+            <div class="theme-count-days-row">
+              <div
+                v-for="e in displayEmotions"
+                :key="`theme-count-day-${e.id}`"
+                class="theme-count-day"
+                :style="{ width: cellWidth + 'px' }"
+              >
+                <button
+                  v-for="(block, blockIndex) in themeCountBlocksByDate[e.date]"
+                  :key="`${e.date}-${block.title}`"
+                  type="button"
+                  class="theme-count-card"
+                  :title="`${block.title} · 涨停${block.totalCount}家\n${block.body}`"
+                  @click="openThemeEntry(e.date)"
+                >
+                  <span class="theme-count-card-main">
+                    <span class="theme-count-rank">{{ blockIndex + 1 }}</span>
+                    <span class="theme-count-name">{{ block.title }}</span>
+                  </span>
+                  <b>涨停 {{ block.totalCount }} 家</b>
+                </button>
+                <span v-if="!themeCountBlocksByDate[e.date]?.length" class="theme-count-day-empty">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div v-else class="theme-count-ladder-empty">题材梯队记录中暂无可计算的涨停家数</div>
+    </section>
+
     <!-- 日期节点标签弹窗 -->
     <div v-if="editingDate" class="edit-modal" @click.self="closeDateEdit">
       <div class="edit-dialog date-tag-dialog">
@@ -1342,6 +1399,15 @@ const displayEmotions = computed(() => {
   return props.emotions.slice(-stairRange.value)
 })
 
+const themeCountBlocksByDate = computed(() => Object.fromEntries(
+  displayEmotions.value.map(emotion => [
+    emotion.date,
+    getThemeContentBlocks(getThemeDailyContent(emotion.date)).filter(block => block.totalCount > 0)
+  ])
+))
+
+const themeCountHasData = computed(() => Object.values(themeCountBlocksByDate.value).some(blocks => blocks.length > 0))
+
 function applyCustomStairRange() {
   if (customStairRange.value && customStairRange.value >= 1 && customStairRange.value <= 365) {
     stairRange.value = customStairRange.value
@@ -1353,6 +1419,7 @@ function applyCustomStairRange() {
 const scrollContainerRef = ref<HTMLElement | null>(null)
 const clusterScrollRef = ref<HTMLElement | null>(null)
 const themeScrollRef = ref<HTMLElement | null>(null)
+const themeCountScrollRef = ref<HTMLElement | null>(null)
 const scrollbarRef = ref<HTMLElement | null>(null)
 const thumbWidth = ref(100)
 const thumbLeft = ref(0)
@@ -1383,39 +1450,32 @@ function updateScrollbar() {
 
 function onScroll() {
   const main = scrollContainerRef.value
-  const cluster = clusterScrollRef.value
-  const theme = themeScrollRef.value
-  if (main && cluster && Math.abs(cluster.scrollLeft - main.scrollLeft) > 0.5) {
-    cluster.scrollLeft = main.scrollLeft
-  }
-  if (main && theme && Math.abs(theme.scrollLeft - main.scrollLeft) > 0.5) {
-    theme.scrollLeft = main.scrollLeft
-  }
+  if (main) syncStairScroll(main)
   // 拖动时也需要更新 thumb 位置（提供视觉反馈）
   updateScrollbar()
 }
 
 function onClusterScroll() {
-  const main = scrollContainerRef.value
   const cluster = clusterScrollRef.value
-  const theme = themeScrollRef.value
-  if (main && cluster && Math.abs(main.scrollLeft - cluster.scrollLeft) > 0.5) {
-    main.scrollLeft = cluster.scrollLeft
-  }
-  if (cluster && theme && Math.abs(theme.scrollLeft - cluster.scrollLeft) > 0.5) {
-    theme.scrollLeft = cluster.scrollLeft
-  }
+  if (cluster) syncStairScroll(cluster)
 }
 
 function onThemeScroll() {
-  const main = scrollContainerRef.value
-  const cluster = clusterScrollRef.value
   const theme = themeScrollRef.value
-  if (main && theme && Math.abs(main.scrollLeft - theme.scrollLeft) > 0.5) {
-    main.scrollLeft = theme.scrollLeft
-  }
-  if (cluster && theme && Math.abs(cluster.scrollLeft - theme.scrollLeft) > 0.5) {
-    cluster.scrollLeft = theme.scrollLeft
+  if (theme) syncStairScroll(theme)
+}
+
+function onThemeCountScroll() {
+  const themeCount = themeCountScrollRef.value
+  if (themeCount) syncStairScroll(themeCount)
+}
+
+function syncStairScroll(source: HTMLElement) {
+  const targets = [scrollContainerRef.value, clusterScrollRef.value, themeScrollRef.value, themeCountScrollRef.value]
+  for (const target of targets) {
+    if (target && target !== source && Math.abs(target.scrollLeft - source.scrollLeft) > 0.5) {
+      target.scrollLeft = source.scrollLeft
+    }
   }
 }
 
@@ -1484,6 +1544,9 @@ onMounted(() => {
     if (scrollContainerRef.value && themeScrollRef.value) {
       themeScrollRef.value.scrollLeft = scrollContainerRef.value.scrollLeft
     }
+    if (scrollContainerRef.value && themeCountScrollRef.value) {
+      themeCountScrollRef.value.scrollLeft = scrollContainerRef.value.scrollLeft
+    }
     nextTick(updateScrollbar)
   })
   window.addEventListener('resize', updateScrollbar)
@@ -1511,6 +1574,9 @@ watch(() => displayEmotions.value, () => {
     }
     if (scrollContainerRef.value && themeScrollRef.value) {
       themeScrollRef.value.scrollLeft = scrollContainerRef.value.scrollLeft
+    }
+    if (scrollContainerRef.value && themeCountScrollRef.value) {
+      themeCountScrollRef.value.scrollLeft = scrollContainerRef.value.scrollLeft
     }
     nextTick(updateScrollbar)
   })
@@ -2472,6 +2538,233 @@ function deleteEdit() {
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid var(--border-color);
+}
+
+.theme-count-ladder-section {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-color);
+}
+
+.theme-count-ladder-header {
+  margin-bottom: 12px;
+}
+
+.theme-count-ladder-header > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.theme-count-ladder-header strong {
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.theme-count-ladder-header small {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.theme-count-ladder-matrix {
+  display: flex;
+  min-width: 0;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: rgba(13, 17, 23, .34);
+}
+
+.theme-count-guide {
+  width: var(--stair-axis-width);
+  flex: 0 0 var(--stair-axis-width);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 13px 6px;
+  box-sizing: border-box;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: rgba(110, 118, 129, .05);
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.theme-count-guide strong {
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.theme-count-guide span,
+.theme-count-guide small {
+  color: var(--text-tertiary);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.theme-count-date {
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 0;
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  background: rgba(110, 118, 129, .09);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .2px;
+}
+
+.theme-count-ladder-scroll {
+  min-width: 0;
+  flex: 1;
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  scrollbar-color: rgba(139, 148, 158, .55) rgba(110, 118, 129, .12);
+  scrollbar-width: thin;
+}
+
+.theme-count-ladder-scroll::-webkit-scrollbar {
+  height: 7px;
+}
+
+.theme-count-ladder-scroll::-webkit-scrollbar-track {
+  background: rgba(110, 118, 129, .08);
+}
+
+.theme-count-ladder-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(139, 148, 158, .5);
+}
+
+.theme-count-date-row,
+.theme-count-days-row {
+  display: flex;
+  align-items: stretch;
+}
+
+.theme-count-date {
+  flex: 0 0 auto;
+}
+
+.theme-count-date:last-child {
+  border-right: 0;
+}
+
+.theme-count-day {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 210px;
+  padding: 8px 5px 10px;
+  box-sizing: border-box;
+  border-right: 1px solid var(--border-color);
+  background: rgba(110, 118, 129, .018);
+}
+
+.theme-count-day:nth-child(even) {
+  background: rgba(110, 118, 129, .04);
+}
+
+.theme-count-day:last-child {
+  border-right: 0;
+}
+
+.theme-count-card {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 62px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 5px;
+  overflow: hidden;
+  border: 1px solid rgba(139, 148, 158, .24);
+  border-radius: 6px;
+  background: rgba(110, 118, 129, .08);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: border-color .16s ease, background .16s ease, transform .16s ease;
+}
+
+.theme-count-card:hover {
+  z-index: 1;
+  border-color: rgba(201, 209, 217, .48);
+  background: rgba(139, 148, 158, .14);
+  transform: translateY(-1px);
+}
+
+.theme-count-card-main {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 4px;
+}
+
+.theme-count-rank {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(110, 118, 129, .2);
+  color: var(--text-tertiary);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.theme-count-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  text-align: left;
+  white-space: normal;
+}
+
+.theme-count-card b {
+  display: block;
+  padding: 2px 7px;
+  border: 1px solid rgba(139, 148, 158, .25);
+  border-radius: 999px;
+  background: rgba(110, 118, 129, .12);
+  color: var(--text-secondary);
+  font-size: 9px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.theme-count-day-empty {
+  margin: auto;
+  color: var(--text-tertiary);
+  font-size: 14px;
+  opacity: .55;
+}
+
+.theme-count-ladder-empty {
+  padding: 24px;
+  border: 1px dashed var(--border-color);
+  border-radius: 6px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  text-align: center;
 }
 
 .theme-ladder-header {
