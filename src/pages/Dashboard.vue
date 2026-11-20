@@ -55,6 +55,11 @@
           <SentimentTemperaturePanel :emotions="allSortedEmotions" />
         </template>
 
+        <!-- 大周期诊断 -->
+        <template v-else-if="module.id === 'marketCycleDiagnosis'">
+          <MarketCycleDiagnosisPanel :emotions="allSortedEmotions" />
+        </template>
+
         <!-- 连板楼梯图 -->
         <template v-else-if="module.id === 'stairChart'">
           <StairChart v-if="allSortedEmotions.length > 0" :emotions="allSortedEmotions" title="连板楼梯图" chartId="stairChart1" />
@@ -229,6 +234,7 @@ import StockFlowPanel from '@/components/StockFlowPanel.vue'
 import PositionCard from '@/components/PositionCard.vue'
 import EmotionAnchorPanel from '@/components/EmotionAnchorPanel.vue'
 import SentimentTemperaturePanel from '@/components/SentimentTemperaturePanel.vue'
+import MarketCycleDiagnosisPanel from '@/components/MarketCycleDiagnosisPanel.vue'
 
 // 注册Chart.js组件
 ChartJS.register(
@@ -261,6 +267,7 @@ const defaultModules: DashboardModule[] = [
   { id: 'spaceBoard', name: '空间板' },
   { id: 'emotionAnchor', name: '情绪锚定' },
   { id: 'sentimentTemperature', name: '市场情绪温度' },
+  { id: 'marketCycleDiagnosis', name: '大周期诊断' },
   { id: 'positions', name: '持仓概览' },
   { id: 'stairChart', name: '连板楼梯图' },
   { id: 'stairChart2', name: '连板楼梯图2' },

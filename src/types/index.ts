@@ -314,6 +314,29 @@ export interface CyclePhaseHistory {
   date: string              // 发生日期
 }
 
+// 大周期诊断：系统根据每日情绪数据给出建议，用户可保留自己的最终判断。
+export type MarketCycleStage = 'start' | 'main' | 'expansion' | 'highDivergence' | 'retreat' | 'iceRepair'
+
+export interface MarketSubCycle {
+  id: string
+  name: string
+  carrier: string
+  startDate: string
+  endDate?: string
+}
+
+export interface MarketCycleRecord {
+  id: string
+  name: string
+  carriers: string[]
+  startDate: string
+  endDate?: string
+  confirmedStage?: MarketCycleStage
+  smallCycles: MarketSubCycle[]
+  createdAt: string
+  updatedAt: string
+}
+
 // 周期总结（保存的周期快照）
 // 独立行情标的（不以题材/涨停为主线的个股分析）
 export type IndependentPosition = string
@@ -396,6 +419,7 @@ export interface AppStorage {
   customCyclePhases: CustomCyclePhase[]
   tradeStyleHistory: TradeStyleHistory[]
   cyclePhaseHistory: CyclePhaseHistory[]
+  marketCycles: MarketCycleRecord[]
   cycleSummaries: CycleSummary[]
   independentTargets: IndependentTarget[]
   independentLabels: IndependentLabel[]
