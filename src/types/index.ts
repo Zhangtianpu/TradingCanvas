@@ -317,12 +317,19 @@ export interface CyclePhaseHistory {
 // 大周期诊断：系统根据每日情绪数据给出建议，用户可保留自己的最终判断。
 export type MarketCycleStage = 'start' | 'main' | 'expansion' | 'highDivergence' | 'retreat' | 'iceRepair'
 
+export interface MarketCycleDailyTrend {
+  status: string
+  note: string
+  updatedAt: string
+}
+
 export interface MarketSubCycle {
   id: string
   name: string
   carrier: string
   startDate: string
   endDate?: string
+  dailyTrends?: Record<string, MarketCycleDailyTrend>
 }
 
 export interface MarketCycleRecord {
@@ -332,6 +339,7 @@ export interface MarketCycleRecord {
   startDate: string
   endDate?: string
   confirmedStage?: MarketCycleStage
+  dailyTrends?: Record<string, MarketCycleDailyTrend>
   smallCycles: MarketSubCycle[]
   createdAt: string
   updatedAt: string

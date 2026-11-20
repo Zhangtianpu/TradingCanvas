@@ -254,6 +254,16 @@
     </div>
     <div v-else class="empty-hint">暂无数据</div>
 
+    <!-- 周期天梯图：仅在主天梯图展示，并与上方日期范围、列宽和滚动位置保持一致。 -->
+    <MarketCycleLadder
+      v-if="chartId === 'stairChart1' && displayEmotions.length > 0"
+      ref="cycleLadderRef"
+      :emotions="displayEmotions"
+      :all-emotions="props.emotions"
+      :cell-width="cellWidth"
+      @scroll="onCycleScroll"
+    />
+
     <!-- 抱团标的：日期列与上方天梯图保持同步 -->
     <section v-if="displayEmotions.length > 0" class="cluster-section">
       <div class="cluster-header">
@@ -754,6 +764,7 @@ import { useEmotionClusterStore } from '@/stores/emotionCluster'
 import { useEmotionAnchorStore } from '@/stores/emotionAnchor'
 import { useThemeLadderStore } from '@/stores/themeLadder'
 import { buildContinuousBoardPromotionRates } from '@/composables/useEmotionMetrics'
+import MarketCycleLadder from '@/components/MarketCycleLadder.vue'
 
 const props = defineProps<{
   emotions: EmotionDaily[]
@@ -1685,6 +1696,7 @@ const scrollContainerRef = ref<HTMLElement | null>(null)
 const clusterScrollRef = ref<HTMLElement | null>(null)
 const themeScrollRef = ref<HTMLElement | null>(null)
 const themeCountScrollRef = ref<HTMLElement | null>(null)
+const cycleLadderRef = ref<InstanceType<typeof MarketCycleLadder> | null>(null)
 const scrollbarRef = ref<HTMLElement | null>(null)
 const thumbWidth = ref(100)
 const thumbLeft = ref(0)
@@ -1735,6 +1747,14 @@ function onThemeCountScroll() {
   if (themeCount) syncStairScroll(themeCount)
 }
 
+function onCycleScroll(left: number) {
+  const targets = [scrollContainerRef.value, clusterScrollRef.value, themeScrollRef.value, themeCountScrollRef.value]
+  for (const target of targets) {
+    if (target && Math.abs(target.scrollLeft - left) > 0.5) target.scrollLeft = left
+  }
+  updateScrollbar()
+}
+
 function syncStairScroll(source: HTMLElement) {
   const targets = [scrollContainerRef.value, clusterScrollRef.value, themeScrollRef.value, themeCountScrollRef.value]
   for (const target of targets) {
@@ -1742,6 +1762,7 @@ function syncStairScroll(source: HTMLElement) {
       target.scrollLeft = source.scrollLeft
     }
   }
+  cycleLadderRef.value?.setScrollLeft(source.scrollLeft)
 }
 
 function onScrollbarMouseDown(e: MouseEvent) {
@@ -1812,6 +1833,7 @@ onMounted(() => {
     if (scrollContainerRef.value && themeCountScrollRef.value) {
       themeCountScrollRef.value.scrollLeft = scrollContainerRef.value.scrollLeft
     }
+    if (scrollContainerRef.value) cycleLadderRef.value?.setScrollLeft(scrollContainerRef.value.scrollLeft)
     nextTick(updateScrollbar)
   })
   window.addEventListener('resize', updateScrollbar)
@@ -1848,6 +1870,7 @@ watch(() => displayEmotions.value, () => {
     if (scrollContainerRef.value && themeCountScrollRef.value) {
       themeCountScrollRef.value.scrollLeft = scrollContainerRef.value.scrollLeft
     }
+    if (scrollContainerRef.value) cycleLadderRef.value?.setScrollLeft(scrollContainerRef.value.scrollLeft)
     nextTick(updateScrollbar)
   })
 }, { deep: true })
