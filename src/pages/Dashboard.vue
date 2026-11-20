@@ -50,6 +50,11 @@
           <EmotionAnchorPanel :show-history="false" :show-rule="false" />
         </template>
 
+        <!-- 市场情绪温度 -->
+        <template v-else-if="module.id === 'sentimentTemperature'">
+          <SentimentTemperaturePanel :emotions="allSortedEmotions" />
+        </template>
+
         <!-- 连板楼梯图 -->
         <template v-else-if="module.id === 'stairChart'">
           <StairChart v-if="allSortedEmotions.length > 0" :emotions="allSortedEmotions" title="连板楼梯图" chartId="stairChart1" />
@@ -223,6 +228,7 @@ import CyclePanel from '@/components/CyclePanel.vue'
 import StockFlowPanel from '@/components/StockFlowPanel.vue'
 import PositionCard from '@/components/PositionCard.vue'
 import EmotionAnchorPanel from '@/components/EmotionAnchorPanel.vue'
+import SentimentTemperaturePanel from '@/components/SentimentTemperaturePanel.vue'
 
 // 注册Chart.js组件
 ChartJS.register(
@@ -254,6 +260,7 @@ interface DashboardModule {
 const defaultModules: DashboardModule[] = [
   { id: 'spaceBoard', name: '空间板' },
   { id: 'emotionAnchor', name: '情绪锚定' },
+  { id: 'sentimentTemperature', name: '市场情绪温度' },
   { id: 'positions', name: '持仓概览' },
   { id: 'stairChart', name: '连板楼梯图' },
   { id: 'stairChart2', name: '连板楼梯图2' },
@@ -271,11 +278,21 @@ function loadModuleOrder() {
     try {
       const parsed = JSON.parse(saved)
       if (Array.isArray(parsed)) {
-        const filtered = parsed.filter((id: string) => defaultModules.some(m => m.id === id))
-        if (filtered.length === defaultModules.length) {
-          moduleOrder.value = filtered
-          return
-        }
+        const filtered = [...new Set(parsed.filter((id: string) => defaultModules.some(m => m.id === id)))]
+        const missing = defaultModules.map(module => module.id).filter(id => !filtered.includes(id))
+        const merged = [...filtered]
+        missing.forEach(id => {
+          const defaultIndex = defaultModules.findIndex(module => module.id === id)
+          const previousId = defaultModules
+            .slice(0, defaultIndex)
+            .map(module => module.id)
+            .reverse()
+            .find(candidate => merged.includes(candidate))
+          const insertAt = previousId ? merged.indexOf(previousId) + 1 : 0
+          merged.splice(insertAt, 0, id)
+        })
+        moduleOrder.value = merged
+        return
       }
     } catch {}
   }
