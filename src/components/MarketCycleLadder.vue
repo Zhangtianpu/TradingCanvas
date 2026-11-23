@@ -35,6 +35,7 @@
             <div>
               <strong>{{ row.name }}</strong>
               <small>{{ row.carrier || '未设置载体' }}</small>
+              <small v-if="row.type === 'big'" class="cycle-duration">{{ cycleDurationLabel(row) }}</small>
             </div>
           </button>
         </template>
@@ -96,6 +97,7 @@
                 <span v-if="isFirstVisibleDate(emotion.date, row)" class="period-name">
                   {{ row.name }}
                   <small v-if="row.type === 'big'">{{ stageLabel(row.stage) }}</small>
+                  <small v-if="row.type === 'big'" class="duration-badge">{{ compactCycleDuration(row) }}</small>
                 </span>
                 <span v-if="getDailyTrend(row, emotion.date)?.status" class="daily-trend-status">
                   {{ getDailyTrend(row, emotion.date)?.status }}
@@ -149,11 +151,18 @@
             <span>开始日期</span>
             <input v-model="editor.startDate" type="date" />
           </label>
-          <label>
-            <span>结束日期</span>
+          <div class="cycle-end-field">
+            <span>周期结束</span>
             <input v-model="editor.endDate" type="date" />
-            <small class="field-tip">留空代表仍在运行</small>
-          </label>
+            <div class="cycle-end-status" :class="{ ended: editor.endDate }">
+              <strong>{{ editor.endDate ? `已设为 ${editor.endDate} 结束` : '当前状态：进行中' }}</strong>
+              <small>{{ editor.endDate ? '保存后，结束日期之后不再计入该周期' : '运行时长会统计到最新交易日' }}</small>
+            </div>
+            <div class="cycle-end-actions">
+              <button type="button" @click="endAtLatestTradingDay">结束于最新交易日</button>
+              <button v-if="editor.endDate" type="button" @click="editor.endDate = ''">恢复进行中</button>
+            </div>
+          </div>
           <label v-if="editor.kind === 'big'" class="wide-field">
             <span>当前阶段</span>
             <select v-model="editor.stage">
@@ -186,6 +195,15 @@
           </div>
           <div class="formula-box secondary">
             负反馈加速度 = 今日负反馈强度 − 前3日负反馈强度均值
+          </div>
+          <div class="risk-rationale">
+            <strong>为什么这样计算</strong>
+            <ul>
+              <li><b>统一量纲：</b>各指标先转换成近60个交易日历史分位，避免“家数、比率”直接相加，并让阈值适应不同市场活跃度。</li>
+              <li><b>覆盖三层风险：</b>炸板与跌停衡量已兑现的亏钱效应（45%）；晋级与梯队衡量接力链条恶化（40%）；封板率衡量当日资金一致性（15%）。</li>
+              <li><b>识别突变：</b>中位出清、龙头断板是离散的结构事件，因此只作小幅加分；加速度用于识别负反馈是否突然变快。</li>
+            </ul>
+            <p>当前权重是可解释的经验初始值，不是由单一论文推导出的固定参数。更严谨的做法是用你的历史记录回测“次日/未来3日亏钱效应”，再校准权重和阈值。</p>
           </div>
           <div class="risk-factor-table">
             <div class="risk-factor-head"><span>计算项目</span><span>权重</span><span>{{ riskDialog.date ? '当日分位分' : '含义' }}</span></div>
@@ -280,6 +298,10 @@ const diagnosis = computed(() => buildCycleDiagnosis(props.allEmotions))
 const diagnosisByDate = computed(() => Object.fromEntries(diagnosis.value.map(point => [point.date, point])))
 const firstDate = computed(() => props.emotions[0]?.date || '')
 const lastDate = computed(() => props.emotions[props.emotions.length - 1]?.date || '')
+const latestTradingDate = computed(() => {
+  const dates = [...props.allEmotions].map(item => item.date).sort((a, b) => a.localeCompare(b))
+  return dates[dates.length - 1] || lastDate.value || new Date().toISOString().slice(0, 10)
+})
 const gridStyle = computed<CSSProperties>(() => ({ width: `${props.emotions.length * props.cellWidth}px` }))
 const cellStyle = computed<CSSProperties>(() => ({ width: `${props.cellWidth}px` }))
 
@@ -396,6 +418,35 @@ function rangesOverlap(start: string, end: string | undefined, visibleStart: str
   return start <= visibleEnd && (!end || end >= visibleStart)
 }
 
+function cycleEndDate(row: Pick<TimelineRow, 'endDate'>) {
+  return row.endDate || latestTradingDate.value
+}
+
+function tradingDayCount(row: Pick<TimelineRow, 'startDate' | 'endDate'>) {
+  const end = cycleEndDate(row)
+  return new Set(props.allEmotions
+    .filter(item => item.date >= row.startDate && item.date <= end)
+    .map(item => item.date)).size
+}
+
+function calendarDayCount(row: Pick<TimelineRow, 'startDate' | 'endDate'>) {
+  const start = Date.parse(`${row.startDate}T00:00:00`)
+  const end = Date.parse(`${cycleEndDate(row)}T00:00:00`)
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return 0
+  return Math.floor((end - start) / 86400000) + 1
+}
+
+function cycleDurationLabel(row: Pick<TimelineRow, 'startDate' | 'endDate'>) {
+  const tradingDays = tradingDayCount(row)
+  const calendarDays = calendarDayCount(row)
+  const prefix = row.endDate ? '已结束 · 共' : '进行中 · 已运行'
+  return `${prefix}${tradingDays}个交易日${calendarDays ? ` / ${calendarDays}个自然日` : ''}`
+}
+
+function compactCycleDuration(row: Pick<TimelineRow, 'startDate' | 'endDate'>) {
+  return `${row.endDate ? '共' : '第'}${tradingDayCount(row)}日`
+}
+
 function suggestedStageForCycle(cycle: MarketCycleRecord) {
   const end = cycle.endDate || lastDate.value
   const point = [...diagnosis.value].reverse().find(item => item.date >= cycle.startDate && item.date <= end)
@@ -494,6 +545,15 @@ function closeEditor() {
   editor.value = null
 }
 
+function endAtLatestTradingDay() {
+  if (!editor.value) return
+  if (latestTradingDate.value < editor.value.startDate) {
+    toast.error('最新交易日早于周期开始日期')
+    return
+  }
+  editor.value.endDate = latestTradingDate.value
+}
+
 function saveCurrent() {
   const value = editor.value
   if (!value) return
@@ -576,7 +636,7 @@ function riskTitle(date: string) {
 
 function rowTitle(row: TimelineRow, date: string) {
   if (!isDateInRow(date, row)) return `${date} · 不在${row.name}周期内`
-  return `${row.name}\n载体：${row.carrier || '未设置'}\n${row.startDate} → ${row.endDate || '进行中'}${row.stage ? `\n阶段：${stageLabel(row.stage)}` : ''}\n点击编辑`
+  return `${row.name}\n载体：${row.carrier || '未设置'}\n${row.startDate} → ${row.endDate || '进行中'}${row.type === 'big' ? `\n${cycleDurationLabel(row)}` : ''}${row.stage ? `\n阶段：${stageLabel(row.stage)}` : ''}\n点击编辑`
 }
 </script>
 
@@ -600,15 +660,16 @@ function rowTitle(row: TimelineRow, date: string) {
 .risk-label:hover { background: rgba(240, 136, 62, .06); }
 .risk-label strong { color: #f0883e; font-size: 10px; }
 .risk-label span { color: var(--text-tertiary); font-size: 8px; }
-.cycle-row-label { width: 100%; height: 46px; display: flex; align-items: center; gap: 7px; padding: 0 8px; color: var(--text-primary); background: transparent; border: 0; border-bottom: 1px solid var(--border-color); text-align: left; cursor: pointer; }
+.cycle-row-label { width: 100%; height: 54px; display: flex; align-items: center; gap: 7px; padding: 0 8px; color: var(--text-primary); background: transparent; border: 0; border-bottom: 1px solid var(--border-color); text-align: left; cursor: pointer; }
 .cycle-row-label.small { height: 38px; padding-left: 20px; background: rgba(110, 118, 129, .035); }
 .cycle-row-label > span { width: 21px; height: 21px; flex: 0 0 21px; display: grid; place-items: center; color: var(--color-blue); background: rgba(88, 166, 255, .1); border: 1px solid rgba(88, 166, 255, .24); border-radius: 5px; font-size: 9px; font-weight: 700; }
 .cycle-row-label.small > span { color: var(--text-secondary); background: var(--bg-tertiary); border-color: var(--border-color); }
 .cycle-row-label > div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .cycle-row-label strong { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .cycle-row-label small { overflow: hidden; color: var(--text-tertiary); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.cycle-row-label .cycle-duration { color: var(--color-blue); font-size: 7px; }
 .cycle-row-label:hover { background: rgba(88, 166, 255, .06); }
-.cycle-row-label.empty { height: 46px; }
+.cycle-row-label.empty { height: 54px; }
 
 .cycle-scroll { min-width: 0; flex: 1; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; scrollbar-color: rgba(88, 166, 255, .45) var(--bg-tertiary); }
 .cycle-grid { min-width: 100%; }
@@ -619,7 +680,7 @@ function rowTitle(row: TimelineRow, date: string) {
 .risk-cell b { font-size: 11px; }
 .risk-cell span { font-size: 8px; }
 .risk-cell span.danger { color: #f85149; } .risk-cell span.warning { color: #f0883e; } .risk-cell span.safe { color: #3fb950; }
-.timeline-row { height: 46px; background: var(--bg-primary); }
+.timeline-row { height: 54px; background: var(--bg-primary); }
 .timeline-row.small { height: 38px; background: rgba(110, 118, 129, .025); }
 .timeline-cell { position: relative; height: 100%; flex: 0 0 auto; overflow: visible; color: var(--text-primary); background: transparent; border: 0; border-right: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); cursor: default; }
 .timeline-cell.active { background: color-mix(in srgb, var(--cycle-color) 15%, transparent); border-top: 3px solid var(--cycle-color); cursor: pointer; }
@@ -630,6 +691,7 @@ function rowTitle(row: TimelineRow, date: string) {
 .period-name { position: absolute; z-index: 2; left: 8px; top: 9px; display: inline-flex; align-items: center; gap: 6px; color: var(--text-primary); font-size: 10px; font-weight: 700; white-space: nowrap; pointer-events: none; }
 .timeline-row.small .period-name { top: 8px; font-size: 9px; font-weight: 600; }
 .period-name small { padding: 2px 5px; color: var(--cycle-color); background: var(--bg-secondary); border: 1px solid color-mix(in srgb, var(--cycle-color) 45%, transparent); border-radius: 8px; font-size: 7px; }
+.period-name .duration-badge { color: var(--text-secondary); border-color: var(--border-color); }
 .daily-trend-status { position: absolute; z-index: 3; left: 7px; right: 7px; bottom: 4px; overflow: hidden; color: var(--cycle-color); font-size: 8px; font-weight: 600; text-align: left; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
 .timeline-row.small .daily-trend-status { bottom: 3px; }
 .daily-trend-note { position: absolute; z-index: 4; right: 5px; bottom: 5px; width: 4px; height: 4px; background: var(--color-gold); border-radius: 50%; pointer-events: none; }
@@ -647,10 +709,18 @@ function rowTitle(row: TimelineRow, date: string) {
 .cycle-editor-body { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; padding: 17px; }
 .cycle-editor-body label { display: grid; align-content: start; gap: 6px; }
 .cycle-editor-body label > span { color: var(--text-secondary); font-size: 10px; }
-.cycle-editor-body input, .cycle-editor-body select { min-width: 0; width: 100%; padding: 8px 10px; color: var(--text-primary); background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 5px; outline: 0; }
+.cycle-editor-body input, .cycle-editor-body select, .cycle-end-field input { min-width: 0; width: 100%; padding: 8px 10px; color: var(--text-primary); background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 5px; outline: 0; }
 .cycle-editor-body input:focus, .cycle-editor-body select:focus { border-color: var(--color-blue); }
 .cycle-editor-body .wide-field { grid-column: 1 / -1; }
 .field-tip { color: var(--text-tertiary); font-size: 8px; }
+.cycle-end-field { display: grid; align-content: start; gap: 6px; }
+.cycle-end-field > span { color: var(--text-secondary); font-size: 10px; }
+.cycle-end-status { display: grid; gap: 2px; padding: 7px 9px; color: var(--color-blue); background: rgba(88, 166, 255, .07); border-radius: 5px; }
+.cycle-end-status.ended { color: var(--text-secondary); background: var(--bg-tertiary); }
+.cycle-end-status strong { font-size: 9px; }
+.cycle-end-status small { color: var(--text-tertiary); font-size: 8px; }
+.cycle-end-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.cycle-end-actions button { padding: 5px 8px; color: var(--color-blue); background: rgba(88, 166, 255, .07); border: 1px solid rgba(88, 166, 255, .25); border-radius: 5px; cursor: pointer; font-size: 8px; }
 .cycle-editor-card footer { display: flex; justify-content: flex-end; gap: 8px; padding: 11px 17px; border-top: 1px solid var(--border-color); }
 .cycle-editor-card footer button { padding: 6px 15px; border-radius: 5px; cursor: pointer; }
 .cycle-editor-card footer .delete { margin-right: auto; color: #f85149; background: rgba(248, 81, 73, .08); border: 1px solid rgba(248, 81, 73, .25); }
@@ -658,9 +728,14 @@ function rowTitle(row: TimelineRow, date: string) {
 .cycle-editor-card footer .save { color: #fff; background: var(--color-blue); border: 1px solid var(--color-blue); }
 
 .risk-explain-card { width: min(660px, 96vw); }
-.risk-explain-body { display: grid; gap: 10px; padding: 17px; }
+.risk-explain-body { display: grid; gap: 10px; max-height: 72vh; overflow-y: auto; padding: 17px; }
 .formula-box { padding: 10px 12px; color: var(--text-primary); background: rgba(88, 166, 255, .07); border: 1px solid rgba(88, 166, 255, .2); border-radius: 6px; font-size: 10px; line-height: 1.6; }
 .formula-box.secondary { color: var(--text-secondary); background: var(--bg-primary); border-color: var(--border-color); }
+.risk-rationale { padding: 11px 12px; color: var(--text-secondary); background: rgba(210, 153, 34, .055); border: 1px solid rgba(210, 153, 34, .2); border-radius: 6px; font-size: 9px; line-height: 1.6; }
+.risk-rationale > strong { color: var(--color-gold); font-size: 10px; }
+.risk-rationale ul { display: grid; gap: 4px; margin: 7px 0; padding-left: 17px; }
+.risk-rationale b { color: var(--text-primary); }
+.risk-rationale p { margin: 7px 0 0; color: var(--text-tertiary); }
 .risk-factor-table { overflow: hidden; border: 1px solid var(--border-color); border-radius: 6px; }
 .risk-factor-head, .risk-factor-row { display: grid; grid-template-columns: 1fr 70px 1.5fr; align-items: center; min-height: 34px; }
 .risk-factor-head { color: var(--text-tertiary); background: var(--bg-tertiary); font-size: 9px; }
