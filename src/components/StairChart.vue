@@ -176,9 +176,11 @@
                     v-for="(e, idx) in displayEmotions"
                     :key="e.id"
                     class="cell"
-                    :class="[getCellClass(e, h, idx), { 'is-editable': !readOnly }]"
-                    :title="readOnly ? (e.remark || '') : (e.remark || '点击录入该网格数据')"
+                    :class="[getCellClass(e, h, idx), { 'is-editable': !readOnly, 'has-stock-decoration': !!getStockDecoration(e, h) }]"
+                    :style="getStockCellStyle(e, h)"
+                    :title="getStockCellTitle(e, h)"
                     @click="!readOnly && handleCellClick(e, h)"
+                    @contextmenu.prevent.stop="!readOnly && openStockDecorMenu($event, e, h)"
                   >
                     <template v-if="hasStockAtHeight(e, h)">
                       <div class="cell-content">
@@ -199,6 +201,7 @@
                           >{{ tag.badge || tag.name.slice(0, 1) }}</span>
                         </div>
                       </div>
+                      <i v-if="getStockDecoration(e, h)?.note" class="stock-note-mark">注</i>
                       <span v-if="!readOnly" class="edit-hint" @click.stop="handleCellClick(e, h)">✎</span>
                     </template>
                     <template v-else-if="h === e.maxBoardHeight">
@@ -220,6 +223,7 @@
                           >{{ tag.badge || tag.name.slice(0, 1) }}</span>
                         </div>
                       </div>
+                      <i v-if="getStockDecoration(e, h)?.note" class="stock-note-mark">注</i>
                       <span v-if="!readOnly" class="edit-hint" @click.stop="handleCellClick(e, h)">✎</span>
                     </template>
                     <template v-else-if="h <= e.maxBoardHeight">
@@ -637,6 +641,43 @@
       <button type="button" class="theme-color-reset" @click="resetThemeCardColor">恢复默认背景</button>
     </div>
 
+    <div
+      v-if="stockDecorMenu"
+      class="stock-decor-menu"
+      :style="{ left: stockDecorMenu.x + 'px', top: stockDecorMenu.y + 'px' }"
+      @click.stop
+      @contextmenu.prevent
+    >
+      <div class="stock-decor-title">
+        <div><strong>{{ stockDecorMenu.stockName }}</strong><span>{{ stockDecorMenu.date }} · {{ stockDecorMenu.height }}板</span></div>
+        <button type="button" @click="closeStockDecorMenu">×</button>
+      </div>
+      <label class="stock-decor-note">
+        <span>标的注释</span>
+        <textarea v-model="stockDecorMenu.note" rows="3" placeholder="记录逻辑、地位、预期或风险点"></textarea>
+      </label>
+      <span class="stock-decor-label">背景颜色</span>
+      <div class="stock-decor-presets">
+        <button
+          v-for="color in stockDecorPresets"
+          :key="color"
+          type="button"
+          :class="{ active: stockDecorMenu.color === color }"
+          :style="{ backgroundColor: color }"
+          :aria-label="`选择颜色 ${color}`"
+          @click="stockDecorMenu.color = color"
+        />
+      </div>
+      <label class="stock-decor-custom">
+        <span>自定义颜色</span>
+        <input v-model="stockDecorMenu.color" type="color">
+      </label>
+      <div class="stock-decor-actions">
+        <button type="button" class="reset" @click="clearStockDecoration">清除设置</button>
+        <button type="button" class="save" @click="saveStockDecoration">保存设置</button>
+      </div>
+    </div>
+
     <!-- 日期节点标签弹窗 -->
     <div v-if="editingDate" class="edit-modal" @click.self="closeDateEdit">
       <div class="edit-dialog date-tag-dialog">
@@ -754,6 +795,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import type { CSSProperties } from 'vue'
 import { useRouter } from 'vue-router'
 import type { EmotionClusterTarget, EmotionDaily, SpaceBoardStock, ThemeLadderTopic } from '@/types'
 import { useEmotionStore } from '@/stores/emotion'
@@ -949,6 +991,21 @@ const tagOverrides = ref<Record<string, Record<string, TagFlags>>>({})
 const dateTagStorageKey = computed(() => `stairChartDateTags_${props.chartId || 'default'}`)
 const dateTagOverrides = ref<Record<string, string[]>>({})
 
+type StockDecoration = { note: string; color: string }
+type StockDecorMenuState = StockDecoration & {
+  key: string
+  date: string
+  stockName: string
+  height: number
+  x: number
+  y: number
+}
+
+const stockDecorStorageKey = computed(() => `stairChartStockDecorations_${props.chartId || 'default'}`)
+const stockDecorations = ref<Record<string, StockDecoration>>({})
+const stockDecorMenu = ref<StockDecorMenuState | null>(null)
+const stockDecorPresets = ['#5a2026', '#173d5f', '#48381d', '#17442c', '#3b2a58', '#4a2428', '#243042', '#30363d']
+
 // 从localStorage加载标签覆盖数据
 function loadTagOverrides() {
   const saved = localStorage.getItem(tagStorageKey.value)
@@ -983,6 +1040,99 @@ function persistDateTagOverrides() {
   window.dispatchEvent(new CustomEvent('stairChartTagsUpdated', {
     detail: { chartId: props.chartId, dateTags: true }
   }))
+}
+
+function loadStockDecorations() {
+  try {
+    const saved = localStorage.getItem(stockDecorStorageKey.value)
+    stockDecorations.value = saved ? JSON.parse(saved) : {}
+  } catch {
+    stockDecorations.value = {}
+  }
+}
+
+function persistStockDecorations() {
+  localStorage.setItem(stockDecorStorageKey.value, JSON.stringify(stockDecorations.value))
+}
+
+function stockDecorationKey(date: string, stockName: string, height: number) {
+  return `${date}::${stockName}::${height}`
+}
+
+function resolveCellStock(e: EmotionDaily, height: number) {
+  return getStockAtHeight(e, height) || (height === e.maxBoardHeight ? getFirstStock(e) : null)
+}
+
+function getStockDecoration(e: EmotionDaily, height: number) {
+  const stock = resolveCellStock(e, height)
+  if (!stock) return null
+  return stockDecorations.value[stockDecorationKey(e.date, stock.name, stock.height)] || null
+}
+
+function getStockCellStyle(e: EmotionDaily, height: number): CSSProperties | undefined {
+  const decoration = getStockDecoration(e, height)
+  if (!decoration?.color) return undefined
+  return {
+    '--stock-decoration-color': decoration.color,
+    background: decoration.color,
+    borderColor: decoration.color,
+    boxShadow: `inset 3px 0 0 ${decoration.color}`
+  } as CSSProperties
+}
+
+function getStockCellTitle(e: EmotionDaily, height: number) {
+  const stock = resolveCellStock(e, height)
+  const decoration = getStockDecoration(e, height)
+  const lines: string[] = []
+  if (stock) lines.push(`${stock.name} · ${stock.height}板`)
+  if (decoration?.note) lines.push(`注释：${decoration.note}`)
+  else if (e.remark) lines.push(e.remark)
+  if (!props.readOnly) lines.push(stock ? '左键编辑 · 右键添加注释和颜色' : '点击录入该网格数据')
+  return lines.join('\n')
+}
+
+function openStockDecorMenu(event: MouseEvent, e: EmotionDaily, height: number) {
+  const stock = resolveCellStock(e, height)
+  if (!stock) return
+  const key = stockDecorationKey(e.date, stock.name, stock.height)
+  const current = stockDecorations.value[key]
+  const menuWidth = 280
+  const menuHeight = 350
+  stockDecorMenu.value = {
+    key,
+    date: e.date,
+    stockName: stock.name,
+    height: stock.height,
+    note: current?.note || '',
+    color: current?.color || '#30363d',
+    x: Math.max(8, Math.min(event.clientX, window.innerWidth - menuWidth - 8)),
+    y: Math.max(8, Math.min(event.clientY, window.innerHeight - menuHeight - 8))
+  }
+}
+
+function closeStockDecorMenu() {
+  stockDecorMenu.value = null
+}
+
+function saveStockDecoration() {
+  const value = stockDecorMenu.value
+  if (!value) return
+  stockDecorations.value = {
+    ...stockDecorations.value,
+    [value.key]: { note: value.note.trim(), color: value.color }
+  }
+  persistStockDecorations()
+  closeStockDecorMenu()
+}
+
+function clearStockDecoration() {
+  const value = stockDecorMenu.value
+  if (!value) return
+  const next = { ...stockDecorations.value }
+  delete next[value.key]
+  stockDecorations.value = next
+  persistStockDecorations()
+  closeStockDecorMenu()
 }
 
 // 生成个股标签的key
@@ -1039,6 +1189,7 @@ function applyTagOverrides(e: EmotionDaily, stock: SpaceBoardStock | null): Spac
 // 初始化加载标签数据
 loadTagOverrides()
 loadDateTagOverrides()
+loadStockDecorations()
 
 // ===== 独立高度计算存储 =====
 // 每个图表实例独立存储heightCalc，不共享
@@ -1674,7 +1825,9 @@ function resetThemeCardColor() {
 }
 
 function onThemeColorDocumentPointer(event: MouseEvent) {
-  if (!(event.target as HTMLElement | null)?.closest('.theme-color-menu')) closeThemeColorMenu()
+  const target = event.target as HTMLElement | null
+  if (!target?.closest('.theme-color-menu')) closeThemeColorMenu()
+  if (!target?.closest('.stock-decor-menu')) closeStockDecorMenu()
 }
 
 function syncThemeCardColors(event: Event) {
@@ -3240,6 +3393,37 @@ function deleteEdit() {
   color: var(--text-primary);
 }
 
+.stock-decor-menu {
+  position: fixed;
+  z-index: 1250;
+  width: 280px;
+  padding: 13px;
+  box-sizing: border-box;
+  border: 1px solid #3d4857;
+  border-radius: 9px;
+  background: #161b22;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, .5);
+}
+
+.stock-decor-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 11px; }
+.stock-decor-title > div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.stock-decor-title strong { overflow: hidden; color: var(--text-primary); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.stock-decor-title span { color: var(--text-tertiary); font-size: 9px; }
+.stock-decor-title button { padding: 0 3px; color: var(--text-tertiary); background: transparent; border: 0; cursor: pointer; font-size: 18px; }
+.stock-decor-note { display: grid; gap: 6px; margin-bottom: 11px; }
+.stock-decor-note > span, .stock-decor-label { color: var(--text-secondary); font-size: 10px; }
+.stock-decor-note textarea { width: 100%; padding: 8px 9px; box-sizing: border-box; color: var(--text-primary); background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 6px; outline: 0; resize: vertical; font-family: inherit; font-size: 11px; line-height: 1.45; }
+.stock-decor-note textarea:focus { border-color: var(--color-blue); }
+.stock-decor-presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin: 7px 0 9px; }
+.stock-decor-presets button { height: 27px; padding: 0; border: 2px solid transparent; border-radius: 6px; cursor: pointer; }
+.stock-decor-presets button:hover, .stock-decor-presets button.active { border-color: #f0f6fc; box-shadow: 0 0 0 2px rgba(88, 166, 255, .3); }
+.stock-decor-custom { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0; border-top: 1px solid var(--border-color); color: var(--text-secondary); font-size: 10px; }
+.stock-decor-custom input { width: 36px; height: 27px; padding: 1px; background: transparent; border: 1px solid var(--border-color); border-radius: 5px; cursor: pointer; }
+.stock-decor-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 7px; }
+.stock-decor-actions button { padding: 7px 8px; border-radius: 5px; cursor: pointer; font-size: 10px; }
+.stock-decor-actions .reset { color: var(--text-secondary); background: var(--bg-tertiary); border: 1px solid var(--border-color); }
+.stock-decor-actions .save { color: #fff; background: var(--color-blue); border: 1px solid var(--color-blue); }
+
 .theme-count-day-empty {
   margin: auto;
   color: var(--text-tertiary);
@@ -4371,6 +4555,32 @@ function deleteEdit() {
 .cell.next-day-premium {
   background: rgba(34, 197, 94, 0.22);
   border-color: rgba(34, 197, 94, 0.55);
+}
+
+.cell.has-stock-decoration .stock-name {
+  background: rgba(0, 0, 0, .28);
+  color: #f0f6fc;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16);
+}
+
+.stock-note-mark {
+  position: absolute;
+  z-index: 3;
+  top: 2px;
+  left: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 14px;
+  color: #fff;
+  background: rgba(0, 0, 0, .52);
+  border: 1px solid rgba(255, 255, 255, .22);
+  border-radius: 3px;
+  font-size: 7px;
+  font-style: normal;
+  font-weight: 700;
+  pointer-events: none;
 }
 
 .stair-table tbody tr {
